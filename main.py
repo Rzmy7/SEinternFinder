@@ -7,6 +7,7 @@ import urllib.request
 import urllib.error
 
 MAX_MESSAGE_LENGTH = 4000
+SUBSCRIBERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "subscribers.json")
 
 def get_env_var(name: str):
     """Fetch environment variable with Windows user registry fallback."""
@@ -23,6 +24,79 @@ def get_env_var(name: str):
         except Exception:
             pass
     return None
+
+def load_subscribers() -> list:
+    """Loads subscribers list from subscribers.json."""
+    if os.path.exists(SUBSCRIBERS_FILE):
+        try:
+            with open(SUBSCRIBERS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return [int(x) for x in data if str(x).lstrip("-").isdigit()]
+        except Exception as e:
+            print(f"Warning: Failed to read {SUBSCRIBERS_FILE}: {e}", file=sys.stderr)
+    return []
+
+def save_subscribers(subs: list):
+    """Saves unique subscribers list to subscribers.json."""
+    unique_subs = sorted(list(set(subs)))
+    try:
+        with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(unique_subs, f, indent=2)
+        print(f"Saved {len(unique_subs)} subscriber(s) to subscribers.json.")
+    except Exception as e:
+        print(f"Error saving {SUBSCRIBERS_FILE}: {e}", file=sys.stderr)
+
+def sync_telegram_subscribers(token: str, current_subs: list) -> list:
+    """Queries Telegram getUpdates to detect new /start and /stop commands."""
+    subscribers = set(current_subs)
+    url = f"https://api.telegram.org/bot{token}/getUpdates"
+    
+    try:
+        with urllib.request.urlopen(url, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            updates = data.get("result", [])
+    except Exception as e:
+        print(f"Notice: Could not fetch getUpdates ({e}). Using existing subscribers list.", file=sys.stderr)
+        return list(subscribers)
+        
+    for update in updates:
+        msg = update.get("message") or update.get("channel_post")
+        if not msg:
+            continue
+        chat = msg.get("chat", {})
+        chat_id = chat.get("id")
+        text = (msg.get("text") or "").strip().lower()
+        
+        if not chat_id:
+            continue
+            
+        if text.startswith("/start") or text == "hi" or text == "hello":
+            if chat_id not in subscribers:
+                subscribers.add(chat_id)
+                welcome = (
+                    "👋 <b>Welcome!</b>\n\n"
+                    "You are now subscribed to the <b>Daily Software Engineering Internship Digest</b>!\n\n"
+                    "🎯 Every morning at <b>8:00 AM (Asia/Colombo)</b>, you will receive active Software Engineering internship opportunities "
+                    "in Sri Lanka and worldwide remote listings.\n\n"
+                    "<i>(Send /stop at any time to unsubscribe)</i>"
+                )
+                try:
+                    send_telegram_message(token, str(chat_id), welcome, parse_mode="HTML")
+                    print(f"New subscriber added & greeted: {chat_id}")
+                except Exception as err:
+                    print(f"Failed to send welcome message to {chat_id}: {err}", file=sys.stderr)
+        elif text.startswith("/stop"):
+            if chat_id in subscribers:
+                subscribers.remove(chat_id)
+                farewell = "👋 You have successfully unsubscribed from daily internship alerts. Send /start anytime to re-subscribe!"
+                try:
+                    send_telegram_message(token, str(chat_id), farewell, parse_mode="HTML")
+                    print(f"Subscriber removed: {chat_id}")
+                except Exception:
+                    pass
+                    
+    return list(subscribers)
 
 def chunk_text(text: str, max_length: int = MAX_MESSAGE_LENGTH):
     """Splits text into chunks preserving line breaks."""
@@ -167,14 +241,13 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
         "contents": [{"parts": [{"text": prompt}]}]
     }
     
-    print("Sending prompt to Gemini 3.8 Flash...")
+    print("Generating report with Gemini 3.8 Flash...")
     result = execute_gemini_request("gemini-3.8-flash", payload, gemini_api_key)
     
     candidate = result.get("candidates", [{}])[0]
     parts = candidate.get("content", {}).get("parts", [])
     text = "".join(part.get("text", "") for part in parts)
     
-    # Strip any enclosing code fences if present
     if text.startswith("```html"):
         text = text[7:]
     if text.startswith("```"):
@@ -185,26 +258,48 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
 
 def main():
     token = get_env_var("TELEGRAM_BOT_TOKEN")
-    chat_id = get_env_var("TELEGRAM_CHAT_ID")
+    primary_chat_id = get_env_var("TELEGRAM_CHAT_ID")
     gemini_api_key = get_env_var("GEMINI_API_KEY")
     
-    if not token or not chat_id:
-        print("Error: Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID.", file=sys.stderr)
+    if not token:
+        print("Error: Missing TELEGRAM_BOT_TOKEN.", file=sys.stderr)
         sys.exit(1)
         
     if not gemini_api_key:
         print("Error: Missing GEMINI_API_KEY. Get a free API key at https://aistudio.google.com/", file=sys.stderr)
         sys.exit(1)
         
-    print("Generating daily internship listings via Gemini 3.8 Flash...")
-    report_text = generate_internship_report(gemini_api_key)
+    # 1. Load existing subscribers and ensure primary chat ID is included
+    subscribers = load_subscribers()
+    if primary_chat_id and str(primary_chat_id).lstrip("-").isdigit():
+        primary_id = int(primary_chat_id)
+        if primary_id not in subscribers:
+            subscribers.append(primary_id)
+            
+    # 2. Check getUpdates for new subscribers (/start) or unsubscribes (/stop)
+    print("Checking for new bot subscribers via getUpdates...")
+    updated_subscribers = sync_telegram_subscribers(token, subscribers)
+    save_subscribers(updated_subscribers)
     
-    print(f"Generated report ({len(report_text)} chars). Sending to Telegram...")
+    if not updated_subscribers:
+        print("No subscribers found to send report to. Exiting.")
+        sys.exit(0)
+        
+    print(f"Active subscribers to receive report: {len(updated_subscribers)} {updated_subscribers}")
+    
+    # 3. Generate the daily report once
+    report_text = generate_internship_report(gemini_api_key)
     chunks = chunk_text(report_text)
     
-    for i, chunk in enumerate(chunks, 1):
-        res = send_telegram_message(token, chat_id, chunk, parse_mode="HTML")
-        print(f"Chunk {i}/{len(chunks)} sent successfully: {res.get('ok')}")
+    # 4. Broadcast to each subscriber
+    for sub_id in updated_subscribers:
+        print(f"Sending digest to subscriber {sub_id}...")
+        for i, chunk in enumerate(chunks, 1):
+            try:
+                res = send_telegram_message(token, str(sub_id), chunk, parse_mode="HTML")
+                print(f"  Chunk {i}/{len(chunks)} sent to {sub_id}: {res.get('ok')}")
+            except Exception as e:
+                print(f"  Failed sending to {sub_id}: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()
