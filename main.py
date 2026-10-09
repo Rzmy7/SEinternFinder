@@ -84,8 +84,8 @@ def send_telegram_message(token: str, chat_id: str, text: str, parse_mode: str =
         raise RuntimeError(f"Telegram API error {e.code}: {error_body}")
 
 def generate_internship_report(gemini_api_key: str) -> str:
-    """Uses Gemini 2.5 Flash with Google Search grounding to find active internships."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
+    """Uses Gemini 3.8 Flash with Google Search grounding to find active internships."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gemini_api_key}"
     
     today_str = datetime.date.today().strftime("%B %d, %Y")
     
