@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import datetime
 import urllib.request
 import urllib.error
@@ -83,19 +84,37 @@ def send_telegram_message(token: str, chat_id: str, text: str, parse_mode: str =
                 return json.loads(resp.read().decode("utf-8"))
         raise RuntimeError(f"Telegram API error {e.code}: {error_body}")
 
-def generate_internship_report(gemini_api_key: str) -> str:
-    """Uses Gemini 3.8 Flash with Google Search grounding to find active internships."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gemini_api_key}"
+def execute_gemini_request(model: str, payload: dict, api_key: str):
+    """Executes a request to Gemini with retry on 503 service unavailable."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
     
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=35) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8")
+            if e.code == 503 and attempt < 3:
+                wait_time = (attempt + 1) * 3
+                print(f"Notice: Model {model} busy (503). Retrying in {wait_time}s...", file=sys.stderr)
+                time.sleep(wait_time)
+                continue
+            raise RuntimeError(f"{e.code}##{err_body}")
+
+def generate_internship_report(gemini_api_key: str) -> str:
+    """Generates the internship report trying multiple fallback models and strategies."""
     today_str = datetime.date.today().strftime("%B %d, %Y")
     
     prompt = f"""
 You are an expert career research assistant for software engineers.
 Today's date is {today_str}.
 
-Search the web and compile a comprehensive daily Software Engineering Internship Digest.
-Find 3-5 open internships in Sri Lanka (e.g. from Rooster.jobs, TopJobs.lk, ITPro.lk, or tech companies)
-and 3-4 worldwide remote internships (e.g. from RemoteRocketship, Himalayas, Wellfound, Simplify.jobs, MLH Fellowship, Outreachy, etc.).
+Search and compile a comprehensive daily Software Engineering Internship Digest.
+Highlight active hiring opportunities:
+1. Sri Lanka Tech Ecosystem: Codrizon (MERN), Swivel Group (AI/Fullstack), Delmege Group, Softmint Solutions, WSO2, Creative Software, Rootcode, Sysco LABS.
+2. Worldwide Remote Programs: MLH Fellowship (Major League Hacking), Outreachy, GitLab, RemoteRocketship, Himalayas.
 
 CRITICAL OUTPUT FORMAT REQUIREMENTS:
 - Output ONLY valid Telegram HTML formatting (using <b>, <i>, <a> tags).
@@ -140,49 +159,45 @@ For each listing:
 Ensure all URLs in <a href="..."> are valid and active web URLs.
 """
 
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ],
-        "tools": [
-            {"google_search": {}}
-        ]
-    }
-
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"}
-    )
+    models_to_try = ["gemini-2.0-flash", "gemini-3.8-flash", "gemini-1.5-flash"]
+    last_error = None
     
-    try:
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8")
-        if e.code in (400, 429):
-            print(f"Notice: Google Search grounding not enabled on free tier ({e.code}). Retrying standard Gemini generation...", file=sys.stderr)
-            # Remove tools and retry standard generation
-            payload.pop("tools", None)
-            data = json.dumps(payload).encode("utf-8")
-            retry_req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-            try:
-                with urllib.request.urlopen(retry_req) as resp:
-                    result = json.loads(resp.read().decode("utf-8"))
-            except urllib.error.HTTPError as e2:
-                err2 = e2.read().decode("utf-8")
-                raise RuntimeError(f"Gemini API request failed ({e2.code}): {err2}")
-        else:
-            raise RuntimeError(f"Gemini API request failed ({e.code}): {error_body}")
+    for model in models_to_try:
+        # First attempt: With Google Search grounding tool
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "tools": [{"google_search": {}}]
+        }
+        
+        try:
+            print(f"Attempting report generation with {model} (search grounding)...")
+            result = execute_gemini_request(model, payload, gemini_api_key)
+            break
+        except RuntimeError as e:
+            err_msg = str(e)
+            # If search tool fails (429 quota or 400 unsupported tool)
+            if "429##" in err_msg or "400##" in err_msg:
+                print(f"Notice: Google Search tool not permitted on free quota ({model}). Retrying without tool...", file=sys.stderr)
+                payload_no_tool = {
+                    "contents": [{"parts": [{"text": prompt}]}]
+                }
+                try:
+                    result = execute_gemini_request(model, payload_no_tool, gemini_api_key)
+                    break
+                except Exception as e_no_tool:
+                    print(f"Model {model} without tool failed: {e_no_tool}", file=sys.stderr)
+                    last_error = e_no_tool
+            else:
+                print(f"Model {model} failed: {err_msg}", file=sys.stderr)
+                last_error = e
+    else:
+        raise RuntimeError(f"All Gemini models exhausted. Last error: {last_error}")
 
     candidate = result.get("candidates", [{}])[0]
     parts = candidate.get("content", {}).get("parts", [])
     text = "".join(part.get("text", "") for part in parts)
+    
+    # Strip any enclosing code fences if present
     if text.startswith("```html"):
         text = text[7:]
     if text.startswith("```"):
@@ -204,7 +219,7 @@ def main():
         print("Error: Missing GEMINI_API_KEY. Get a free API key at https://aistudio.google.com/", file=sys.stderr)
         sys.exit(1)
         
-    print("Fetching daily internship listings via Gemini Search...")
+    print("Generating daily internship listings via Gemini...")
     report_text = generate_internship_report(gemini_api_key)
     
     print(f"Generated report ({len(report_text)} chars). Sending to Telegram...")
