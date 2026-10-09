@@ -245,57 +245,78 @@ def generate_internship_report(gemini_api_key: str = None, nvidia_api_key: str =
     today_str = datetime.date.today().strftime("%B %d, %Y")
     
     prompt = f"""
-You are an expert career research assistant for software engineering students and graduates.
+You are an expert career research assistant specializing in the Sri Lankan tech industry.
 Today's date is {today_str}.
 
-Compile a rich, comprehensive daily Software Engineering Internship Digest.
-Include real opportunities, top tech hiring companies, and programs:
+Compile an exhaustive, highly detailed daily Software Engineering Internship Digest.
 
-1. SRI LANKA TECH COMPANIES & OPENINGS:
-Highlight 4-5 companies actively hiring software engineering interns in Sri Lanka (e.g. Codrizon, Swivel Group, Delmege, Softmint Solutions, WSO2, Creative Software, Rootcode, Sysco LABS, 99x).
-
-2. WORLDWIDE REMOTE INTERNSHIPS & FELLOWSHIPS:
-Highlight 3-4 prestigious global remote programs and platforms (e.g. MLH Fellowship, Outreachy, GitLab, RemoteRocketship, Himalayas).
+CRITICAL INSTRUCTIONS ON FOCUS:
+- THE PRIMARY FOCUS IS SRI LANKA (75%+ OF THE REPORT).
+- DO NOT ONLY LIST FAMOUS TECH GIANTS! You MUST actively feature early-stage tech startups, boutique development agencies, small software houses, and fast-growing product teams in Sri Lanka.
+- Include opportunities across various technologies: MERN/MEAN, Python/Django, PHP/Laravel, React/Next.js, Flutter/React Native, Java, .NET/C#, and AI/Data engineering.
+- Cover all types of Sri Lankan companies:
+  * Local Startups & Boutique Studios: Codrizon, Coullax, Softmint Solutions, ClusterX, Kingteza, Agro Ventures, Thyaga, Eyepax, Surge Viral, Octave, Kreativ, Calcey, Rootcode.
+  * Established Tech & Enterprise: Delmege Group, WSO2, 99x, Creative Software, Sysco LABS, Epic Lanka, IFS.
+- Include direct apply links or platform references (Rooster.jobs, TopJobs.lk, ITPro.lk, LinkedIn).
+- Include 2-3 prominent worldwide remote options open to international applicants.
 
 CRITICAL OUTPUT FORMAT REQUIREMENTS:
 - Output ONLY valid Telegram HTML formatting (using <b>, <i>, <a> tags).
 - Do NOT wrap your output in markdown code blocks like ```html. Output raw HTML directly.
-- The report MUST strictly follow this exact 2-part structure:
+- The report MUST strictly follow this structure:
 
-🎯 <b>DAILY SOFTWARE ENGINEERING INTERNSHIP DIGEST</b>
+🎯 <b>DAILY SRI LANKA &amp; GLOBAL SE INTERNSHIP DIGEST</b>
 📅 Date: {today_str}
 
 ━━━━━━━━━━━━━━━━━━━━
-🇱🇰 <b>PART 1: SRI LANKA INTERNSHIPS (LOCAL)</b>
+🇱🇰 <b>PART 1: SRI LANKA INTERNSHIPS (PRIMARY FOCUS)</b>
 ━━━━━━━━━━━━━━━━━━━━
 
+<b>🚀 SECTION 1A: LOCAL STARTUPS &amp; BOUTIQUE STUDIOS</b>
+(Feature 3-4 small/growing startups or boutique dev agencies)
 For each listing:
-• <b>Company Name</b>: [Company Name]
-• <b>About Company</b>: [1-2 sentences on what the company does]
-• <b>Role Title</b>: [Role Title & Work Model: On-site/Hybrid/Remote]
+• <b>Company Name</b>: [Company Name &amp; Startup Stage/Type]
+• <b>About Company</b>: [1-2 sentences on what they build/do]
+• <b>Role Title</b>: [Role Title &amp; Work Model: On-site/Hybrid/Remote within Sri Lanka]
 • <b>Tech Stack</b>: [Key languages, frameworks, databases, tools]
-• <b>Expected Skills</b>: [CS fundamentals, OOP, API design, etc.]
-• <b>Key Notes & Special Requirements</b>: [Target undergrad year/degree, duration, stipend, deadline/posted date]
+• <b>Expected Skills &amp; Mindset</b>: [Core skills, problem-solving, self-learning]
+• <b>Key Notes &amp; Special Requirements</b>: [Target undergrad year, duration, stipend if disclosed, deadline]
 • <b>Company Website</b>: <a href="[URL]">[Domain/URL]</a>
 • <b>Direct Apply Link</b>: <a href="[URL]">Apply Here</a>
+
+<b>🏢 SECTION 1B: ESTABLISHED TECH &amp; ENTERPRISE FIRMS</b>
+(Feature 2-3 established mid-to-large software houses in Sri Lanka)
+For each listing:
+• <b>Company Name</b>: [Company Name]
+• <b>About Company</b>: [1-2 sentences overview]
+• <b>Role Title</b>: [Role Title &amp; Work Model]
+• <b>Tech Stack</b>: [Languages, frameworks]
+• <b>Key Notes &amp; Special Requirements</b>: [Undergrad degree/year, duration, perks]
+• <b>Company Website</b>: <a href="[URL]">[Domain/URL]</a>
+• <b>Direct Apply Link</b>: <a href="[URL]">Apply Here</a>
+
+<b>🔎 SRI LANKA DAILY JOB PORTAL SHORTCUTS:</b>
+• <a href="https://rooster.jobs">Rooster.jobs (Sri Lanka Tech &amp; Startup Board)</a>
+• <a href="https://topjobs.lk">TopJobs.lk (IT &amp; Software Openings)</a>
+• <a href="https://itpro.lk">ITPro.lk (Dedicated Sri Lanka IT Roles)</a>
+• <a href="https://internhub.lk">InternHub.lk (Undergraduate Internships)</a>
 
 ━━━━━━━━━━━━━━━━━━━━
 🌐 <b>PART 2: WORLDWIDE REMOTE INTERNSHIPS</b>
 ━━━━━━━━━━━━━━━━━━━━
-
+(Feature 2-3 verified worldwide remote programs open to anywhere)
 For each listing:
-• <b>Company Name</b>: [Company Name]
-• <b>About Company</b>: [1-2 sentences on what the company does]
-• <b>Role Title</b>: [Role Title & Remote Policy]
-• <b>Tech Stack</b>: [Key languages, frameworks, tools]
-• <b>Expected Skills</b>: [Key competencies sought]
-• <b>Key Notes & Special Requirements</b>: [Eligibility, timezone expectations, application deadline]
+• <b>Company / Program Name</b>: [Name]
+• <b>About Program</b>: [1-2 sentences]
+• <b>Role Title</b>: [Role Title &amp; Remote Policy]
+• <b>Tech Stack</b>: [Key languages, tools]
+• <b>Key Notes &amp; Stipend</b>: [Eligibility, duration, stipend]
 • <b>Company Website</b>: <a href="[URL]">[Domain/URL]</a>
 • <b>Direct Apply Link</b>: <a href="[URL]">Apply Here</a>
 
 ━━━━━━━━━━━━━━━━━━━━
-💡 <b>PRO TIPS FOR TODAY</b>
-• [1-2 actionable tips on resumes, GitHub portfolios, or interview preparation]
+💡 <b>PRO TIPS FOR SRI LANKAN APPLICANTS</b>
+• [1-2 actionable tips on applying to startups vs corporate tech houses]
 
 Ensure all URLs in <a href="..."> are valid and active web URLs.
 """
@@ -341,38 +362,72 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
             time.sleep(snooze_wait)
         else:
             print("All snooze cycles exhausted. Using verified safety digest.", file=sys.stderr)
-    return f"""🎯 <b>DAILY SOFTWARE ENGINEERING INTERNSHIP DIGEST</b>
+    return f"""🎯 <b>DAILY SRI LANKA &amp; GLOBAL SE INTERNSHIP DIGEST</b>
 📅 Date: {today_str}
 
 ━━━━━━━━━━━━━━━━━━━━
-🇱🇰 <b>PART 1: SRI LANKA INTERNSHIPS (LOCAL)</b>
+🇱🇰 <b>PART 1: SRI LANKA INTERNSHIPS (PRIMARY FOCUS)</b>
 ━━━━━━━━━━━━━━━━━━━━
 
-1️⃣ <b>Codrizon</b>
-• <b>About Company</b>: Innovative software consultancy building scalable web platforms and enterprise digital products.
+<b>🚀 SECTION 1A: LOCAL STARTUPS &amp; BOUTIQUE STUDIOS</b>
+
+1️⃣ <b>Codrizon (Web &amp; SaaS Startup)</b>
+• <b>About Company</b>: Agile digital consultancy and product agency engineering scalable web applications.
 • <b>Role Title</b>: Intern Software Engineer - MERN (Full-Time Remote / Sri Lanka)
-• <b>Tech Stack</b>: MongoDB, Express.js, React, Node.js, JavaScript (ES6+), Git/GitHub.
-• <b>Expected Skills</b>: CS fundamentals & OOP, REST API design, state management, fullstack debugging.
-• <b>Key Notes & Special Requirements</b>: Currently pursuing or recent graduate in CS/SE/IT. Prior projects valued.
+• <b>Tech Stack</b>: MongoDB, Express.js, React.js, Node.js, JavaScript (ES6+), Git/GitHub.
+• <b>Expected Skills &amp; Mindset</b>: REST API architecture, responsive UI components, self-starter mentality.
+• <b>Key Notes &amp; Special Requirements</b>: CS/IT undergraduate or recent graduate. Prior GitHub repos strongly valued.
 • <b>Company Website</b>: <a href="https://codrizon.com">codrizon.com</a>
 • <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
 
-2️⃣ <b>Swivel Group</b>
-• <b>About Company</b>: Australian technology provider with Colombo engineering centre creating enterprise AI ventures.
-• <b>Role Title</b>: Intern - Software Engineer (AI & Fullstack) (Hybrid - Colombo)
-• <b>Tech Stack</b>: Python, PyTorch/TensorFlow, REST APIs, JavaScript/TypeScript, SQL/NoSQL.
-• <b>Expected Skills</b>: Passion for Applied AI & ML, clean code practices, testing, agile teamwork.
-• <b>Key Notes & Special Requirements</b>: Full medical cover, structured mentorship, competitive internship allowance.
+2️⃣ <b>Softmint Software Solutions (Product Studio)</b>
+• <b>About Company</b>: Fast-growing software studio delivering custom web portals and SaaS platforms.
+• <b>Role Title</b>: Intern Software Engineer - React / Frontend (Hybrid - Colombo)
+• <b>Tech Stack</b>: React, Redux Toolkit, Tailwind CSS, TypeScript, RESTful endpoints.
+• <b>Expected Skills &amp; Mindset</b>: Modular UI architecture, API consumption, clean code and design sensibility.
+• <b>Key Notes &amp; Special Requirements</b>: 6-month internship. Ideal for 2nd/3rd year university students.
+• <b>Company Website</b>: <a href="https://softmint.net">softmint.net</a>
+• <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
+
+3️⃣ <b>Swivel Group (Venture &amp; AI Tech)</b>
+• <b>About Company</b>: High-growth tech provider partnering with international ventures, operating Colombo labs.
+• <b>Role Title</b>: Intern - Software Engineer (AI &amp; Fullstack) (Hybrid - Colombo)
+• <b>Tech Stack</b>: Python, PyTorch/TensorFlow, Node.js/TypeScript, SQL/NoSQL.
+• <b>Expected Skills &amp; Mindset</b>: Applied AI passion, algorithm design, fast prototyping, teamwork.
+• <b>Key Notes &amp; Special Requirements</b>: Comprehensive medical benefits, structured mentorship, competitive stipend.
 • <b>Company Website</b>: <a href="https://swivelgroup.com.au">swivelgroup.com.au</a>
 • <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
 
-3️⃣ <b>Delmege Group</b>
-• <b>About Company</b>: Leading diversified conglomerate modernizing internal digital infrastructure.
-• <b>Role Title</b>: Software Development & Integration Intern (Colombo)
+4️⃣ <b>Coullax &amp; ClusterX (Digital Engineering Teams)</b>
+• <b>About Company</b>: Boutique engineering studios building enterprise portals and cloud-native solutions.
+• <b>Role Title</b>: Software Engineer Intern (Web &amp; Cloud)
+• <b>Tech Stack</b>: JavaScript, Python, PHP/Laravel, MySQL/PostgreSQL, Git.
+• <b>Expected Skills &amp; Mindset</b>: Fundamentals of OOP, database modeling, eagerness to learn fast.
+• <b>Company Website</b>: <a href="https://rooster.jobs">Explore on Rooster</a>
+• <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
+
+<b>🏢 SECTION 1B: ESTABLISHED TECH &amp; ENTERPRISE FIRMS</b>
+
+1️⃣ <b>Delmege Group (Digital Transformation)</b>
+• <b>About Company</b>: Leading diversified conglomerate modernizing core business systems.
+• <b>Role Title</b>: Software Development &amp; Integration Intern (Colombo)
 • <b>Tech Stack</b>: Java / C# .NET, SQL Server, Web APIs.
-• <b>Key Notes & Special Requirements</b>: Applications open through October 21.
+• <b>Key Notes &amp; Special Requirements</b>: Applications open through October 21, 2026.
 • <b>Company Website</b>: <a href="https://delmege.com">delmege.com</a>
 • <b>Direct Apply Link</b>: <a href="https://www.topjobs.lk">Apply on TopJobs.lk</a>
+
+2️⃣ <b>WSO2 &amp; Creative Software (Tech Giants)</b>
+• <b>About Company</b>: Sri Lanka's globally renowned open-source and enterprise technology leaders.
+• <b>Role Title</b>: Software Engineering Intern (Hybrid - Colombo)
+• <b>Tech Stack</b>: Java, Ballerina, Go, React, Distributed Systems, Cloud Architecture.
+• <b>Key Notes &amp; Special Requirements</b>: Continuous undergraduate intake; competitive allowance &amp; mentorship.
+• <b>Direct Careers Link</b>: <a href="https://wso2.com/careers/">WSO2 Careers</a> | <a href="https://creativesoftware.com/careers">Creative Software</a>
+
+<b>🔎 SRI LANKA DAILY JOB PORTAL SHORTCUTS:</b>
+• <a href="https://rooster.jobs">Rooster.jobs (Sri Lanka Tech &amp; Startup Board)</a>
+• <a href="https://topjobs.lk">TopJobs.lk (IT &amp; Software Openings)</a>
+• <a href="https://itpro.lk">ITPro.lk (Dedicated Sri Lanka IT Roles)</a>
+• <a href="https://internhub.lk">InternHub.lk (Undergraduate Internships)</a>
 
 ━━━━━━━━━━━━━━━━━━━━
 🌐 <b>PART 2: WORLDWIDE REMOTE INTERNSHIPS</b>
@@ -382,7 +437,7 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
 • <b>About Company</b>: Global developer education program backed by GitHub, AWS, and Meta.
 • <b>Role Title</b>: Open Source Software Engineering Fellow (100% Remote - Worldwide)
 • <b>Tech Stack</b>: Python, JavaScript, TypeScript, Go, Rust, or C++.
-• <b>Key Notes & Special Requirements</b>: 12-week remote fellowship with educational stipend. Rolling admissions.
+• <b>Key Notes &amp; Special Requirements</b>: 12-week remote fellowship with educational stipend. Rolling admissions.
 • <b>Company Website</b>: <a href="https://mlh.io">mlh.io</a>
 • <b>Direct Apply Link</b>: <a href="https://fellowship.mlh.io/">Apply at fellowship.mlh.io</a>
 
@@ -390,20 +445,20 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
 • <b>About Company</b>: Global remote internship program pairing developers with Mozilla, Linux Kernel, and Wikimedia.
 • <b>Role Title</b>: Open Source Software Engineer Intern (100% Remote - Worldwide)
 • <b>Tech Stack</b>: Python, C, C++, JavaScript, Linux, Git.
-• <b>Key Notes & Special Requirements</b>: $7,000 USD stipend for 3-month full-time remote internship.
+• <b>Key Notes &amp; Special Requirements</b>: $7,000 USD stipend for 3-month full-time remote internship.
 • <b>Company Website</b>: <a href="https://www.outreachy.org">outreachy.org</a>
 • <b>Direct Apply Link</b>: <a href="https://www.outreachy.org/apply/">Apply at outreachy.org</a>
 
-3️⃣ <b>RemoteRocketship & Himalayas Curated Boards</b>
+3️⃣ <b>RemoteRocketship &amp; Himalayas Curated Boards</b>
 • <b>About Platform</b>: Daily aggregators for entry-level "work anywhere" startup roles.
 • <b>Direct Links</b>:
   • <a href="https://remoterocketship.com">RemoteRocketship Worldwide</a>
   • <a href="https://himalayas.app/jobs/internship">Himalayas Internship Portal</a>
 
 ━━━━━━━━━━━━━━━━━━━━
-💡 <b>PRO TIPS FOR TODAY</b>
-• Polish your GitHub repo pinned projects with clear README setup instructions and demo videos.
-• Apply within 48 hours of posting for maximum recruiter response rate.
+💡 <b>PRO TIPS FOR SRI LANKAN APPLICANTS</b>
+• <b>Startups value initiative</b>: When applying to local startups on Rooster.jobs, include a link to a live deployed project (Vercel/Render) or clean GitHub repo.
+• <b>Speed matters</b>: Small teams often review the first 20-30 applications—apply within 24-48 hours of posting!
 """
 
 def main():
