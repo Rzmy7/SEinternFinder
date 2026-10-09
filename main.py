@@ -300,36 +300,47 @@ For each listing:
 Ensure all URLs in <a href="..."> are valid and active web URLs.
 """
 
-    # 1. PRIMARY PROVIDER: Google Gemini
-    if gemini_api_key:
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        available_models = get_supported_gemini_models(gemini_api_key)
-        print(f"Supported Gemini models: {available_models[:5]}")
+    MAX_SNOOZE_CYCLES = 3
+    SNOOZE_SECONDS = 300  # 5 minutes snooze per cycle
+
+    for cycle in range(1, MAX_SNOOZE_CYCLES + 1):
+        print(f"--- Generation Cycle {cycle}/{MAX_SNOOZE_CYCLES} ---")
         
-        for model in available_models:
+        # 1. PRIMARY PROVIDER: Google Gemini
+        if gemini_api_key:
+            payload = {"contents": [{"parts": [{"text": prompt}]}]}
+            available_models = get_supported_gemini_models(gemini_api_key)
+            print(f"Supported Gemini models: {available_models[:5]}")
+            
+            for model in available_models:
+                try:
+                    print(f"Attempting generation with Gemini '{model}'...")
+                    result = execute_gemini_request(model, payload, gemini_api_key)
+                    candidate = result.get("candidates", [{}])[0]
+                    parts = candidate.get("content", {}).get("parts", [])
+                    text = "".join(part.get("text", "") for part in parts)
+                    return clean_fences(text)
+                except Exception as e:
+                    print(f"Gemini model '{model}' failed: {e}", file=sys.stderr)
+                    time.sleep(3)
+
+        # 2. SECONDARY FALLBACK PROVIDER: NVIDIA NIM (DeepSeek)
+        if nvidia_api_key:
             try:
-                print(f"Attempting generation with Gemini '{model}'...")
-                result = execute_gemini_request(model, payload, gemini_api_key)
-                candidate = result.get("candidates", [{}])[0]
-                parts = candidate.get("content", {}).get("parts", [])
-                text = "".join(part.get("text", "") for part in parts)
-                return clean_fences(text)
+                print("Gemini unavailable. Falling back to NVIDIA NIM (deepseek-ai/deepseek-v4.1-flash)...")
+                res = execute_nvidia_request(prompt, nvidia_api_key)
+                if res:
+                    return res
             except Exception as e:
-                print(f"Gemini model '{model}' failed: {e}", file=sys.stderr)
-                time.sleep(3)
+                print(f"NVIDIA NIM fallback failed: {e}", file=sys.stderr)
 
-    # 2. SECONDARY FALLBACK PROVIDER: NVIDIA NIM (DeepSeek)
-    if nvidia_api_key:
-        try:
-            print("Gemini unavailable. Falling back to NVIDIA NIM (deepseek-ai/deepseek-v4.1-flash)...")
-            res = execute_nvidia_request(prompt, nvidia_api_key)
-            if res:
-                return res
-        except Exception as e:
-            print(f"NVIDIA NIM fallback failed: {e}", file=sys.stderr)
-
-    # 3. TERTIARY FALLBACK: Verified Static Digest
-    print("All cloud LLM providers busy. Using verified safety digest.", file=sys.stderr)
+        # 3. If both failed, SNOOZE and retry
+        if cycle < MAX_SNOOZE_CYCLES:
+            snooze_wait = SNOOZE_SECONDS * cycle
+            print(f"⚠️ Both Gemini and NVIDIA are temporarily experiencing downtime. Snoozing for {snooze_wait // 60} minutes before retrying...", file=sys.stderr)
+            time.sleep(snooze_wait)
+        else:
+            print("All snooze cycles exhausted. Using verified safety digest.", file=sys.stderr)
     return f"""🎯 <b>DAILY SOFTWARE ENGINEERING INTERNSHIP DIGEST</b>
 📅 Date: {today_str}
 
