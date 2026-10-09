@@ -302,21 +302,40 @@ For each listing:
 • <a href="https://internhub.lk">InternHub.lk (Undergraduate Internships)</a>
 
 ━━━━━━━━━━━━━━━━━━━━
-🌐 <b>PART 2: WORLDWIDE REMOTE INTERNSHIPS</b>
+🌐 <b>PART 2: WORLDWIDE REMOTE INTERNSHIPS (GLOBAL STARTUPS &amp; TEAMS)</b>
 ━━━━━━━━━━━━━━━━━━━━
-(Feature 2-3 verified worldwide remote programs open to anywhere)
+(Emphasize early-stage startups, YC-backed companies, remote-first SaaS teams, and developer fellowships open to worldwide/anywhere applicants)
+
+<b>🚀 SECTION 2A: GLOBAL REMOTE STARTUPS &amp; DISTRIBUTED PRODUCT TEAMS</b>
+(Feature 2-3 remote-first international startups or early-stage product teams)
 For each listing:
-• <b>Company / Program Name</b>: [Name]
-• <b>About Program</b>: [1-2 sentences]
-• <b>Role Title</b>: [Role Title &amp; Remote Policy]
-• <b>Tech Stack</b>: [Key languages, tools]
-• <b>Key Notes &amp; Stipend</b>: [Eligibility, duration, stipend]
+• <b>Company Name &amp; Startup Focus</b>: [Startup Name &amp; What they build (AI, SaaS, FinTech, DevTools, etc.)]
+• <b>About Company</b>: [1-2 sentences on their mission/product]
+• <b>Role Title &amp; Remote Policy</b>: [Role Title &amp; 100% Remote Worldwide / Async timezone]
+• <b>Tech Stack</b>: [Key languages, frameworks, cloud tools]
+• <b>Expected Skills &amp; Startup Mindset</b>: [Self-driven, async communication, Git proficiency]
+• <b>Key Notes &amp; Special Requirements</b>: [Eligibility, duration, stipend/compensation, deadline]
 • <b>Company Website</b>: <a href="[URL]">[Domain/URL]</a>
 • <b>Direct Apply Link</b>: <a href="[URL]">Apply Here</a>
 
+<b>🌍 SECTION 2B: GLOBAL DEVELOPER FELLOWSHIPS &amp; INITIATIVES</b>
+(Feature 1-2 recognized paid international programs)
+For each listing:
+• <b>Program Name</b>: [Name, e.g. MLH Fellowship, Outreachy]
+• <b>Role Title</b>: [Role Title &amp; Remote details]
+• <b>Tech Stack &amp; Focus</b>: [Languages, open-source tech]
+• <b>Stipend &amp; Duration</b>: [Stipend, duration, rolling deadline]
+• <b>Direct Apply Link</b>: <a href="[URL]">Apply Here</a>
+
+<b>🔎 GLOBAL STARTUP JOB SEARCH SHORTCUTS:</b>
+• <a href="https://wellfound.com">Wellfound (formerly AngelList - Worldwide Startups)</a>
+• <a href="https://www.workatastartup.com">Y Combinator (Work at a Startup - Remote Roles)</a>
+• <a href="https://remoterocketship.com">RemoteRocketship (Verified Worldwide Remote)</a>
+• <a href="https://himalayas.app/jobs/internship">Himalayas (Internship Portal)</a>
+
 ━━━━━━━━━━━━━━━━━━━━
-💡 <b>PRO TIPS FOR SRI LANKAN APPLICANTS</b>
-• [1-2 actionable tips on applying to startups vs corporate tech houses]
+💡 <b>PRO TIPS FOR APPLICANTS (LOCAL &amp; GLOBAL)</b>
+• [1-2 actionable tips on applying to startups, showcasing public GitHub work, and async communication]
 
 Ensure all URLs in <a href="..."> are valid and active web URLs.
 """
@@ -430,8 +449,25 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
 • <a href="https://internhub.lk">InternHub.lk (Undergraduate Internships)</a>
 
 ━━━━━━━━━━━━━━━━━━━━
-🌐 <b>PART 2: WORLDWIDE REMOTE INTERNSHIPS</b>
+🌐 <b>PART 2: WORLDWIDE REMOTE INTERNSHIPS (GLOBAL STARTUPS &amp; TEAMS)</b>
 ━━━━━━━━━━━━━━━━━━━━
+
+<b>🚀 SECTION 2A: GLOBAL REMOTE STARTUPS &amp; DISTRIBUTED TEAMS</b>
+
+1️⃣ <b>Cal.com &amp; PostHog (Open-Source SaaS Startups)</b>
+• <b>About Company</b>: High-growth, remote-first developer-centric startups with global engineering teams.
+• <b>Role Title</b>: Open Source Contributor &amp; Engineering Fellow (100% Remote - Anywhere)
+• <b>Tech Stack</b>: Next.js, React, TypeScript, Node.js, PostgreSQL, Tailwind CSS.
+• <b>Expected Skills &amp; Startup Mindset</b>: Independent execution, public PRs, async Slack/GitHub collaboration.
+• <b>Key Notes &amp; Special Requirements</b>: Open worldwide with flexible hours; bounty/stipend opportunities.
+• <b>Direct Portals</b>: <a href="https://cal.com">cal.com</a> | <a href="https://posthog.com/careers">PostHog Careers</a>
+
+2️⃣ <b>Y Combinator Remote-First Startups</b>
+• <b>About Platform</b>: Early-stage and Series A startups backed by Y Combinator actively seeking intern &amp; junior talent.
+• <b>Role Focus</b>: Full-Stack Web, AI Engineering, Mobile (Flutter/React Native).
+• <b>Direct Access Link</b>: <a href="https://www.workatastartup.com">Explore on YC Work at a Startup</a>
+
+<b>🌍 SECTION 2B: GLOBAL DEVELOPER FELLOWSHIPS</b>
 
 1️⃣ <b>MLH Fellowship (Major League Hacking)</b>
 • <b>About Company</b>: Global developer education program backed by GitHub, AWS, and Meta.
@@ -449,16 +485,16 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
 • <b>Company Website</b>: <a href="https://www.outreachy.org">outreachy.org</a>
 • <b>Direct Apply Link</b>: <a href="https://www.outreachy.org/apply/">Apply at outreachy.org</a>
 
-3️⃣ <b>RemoteRocketship &amp; Himalayas Curated Boards</b>
-• <b>About Platform</b>: Daily aggregators for entry-level "work anywhere" startup roles.
-• <b>Direct Links</b>:
-  • <a href="https://remoterocketship.com">RemoteRocketship Worldwide</a>
-  • <a href="https://himalayas.app/jobs/internship">Himalayas Internship Portal</a>
+<b>🔎 GLOBAL STARTUP JOB SEARCH SHORTCUTS:</b>
+• <a href="https://wellfound.com">Wellfound (formerly AngelList - Worldwide Startups)</a>
+• <a href="https://www.workatastartup.com">Y Combinator (Work at a Startup - Remote Roles)</a>
+• <a href="https://remoterocketship.com">RemoteRocketship (Verified Worldwide Remote)</a>
+• <a href="https://himalayas.app/jobs/internship">Himalayas (Internship Portal)</a>
 
 ━━━━━━━━━━━━━━━━━━━━
-💡 <b>PRO TIPS FOR SRI LANKAN APPLICANTS</b>
-• <b>Startups value initiative</b>: When applying to local startups on Rooster.jobs, include a link to a live deployed project (Vercel/Render) or clean GitHub repo.
-• <b>Speed matters</b>: Small teams often review the first 20-30 applications—apply within 24-48 hours of posting!
+💡 <b>PRO TIPS FOR APPLICANTS (LOCAL &amp; GLOBAL)</b>
+• <b>Startups value initiative over degrees</b>: Share live project demos (Vercel/Render/Fly.io) and clean GitHub repositories.
+• <b>Asynchronous readiness</b>: When applying abroad, emphasize strong written communication, time zone flexibility, and self-management.
 """
 
 def main():
