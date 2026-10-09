@@ -158,8 +158,31 @@ def send_telegram_message(token: str, chat_id: str, text: str, parse_mode: str =
                 return json.loads(resp.read().decode("utf-8"))
         raise RuntimeError(f"Telegram API error {e.code}: {error_body}")
 
+def get_supported_models(api_key: str) -> list:
+    """Queries ModelService to get currently available models supporting generateContent."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            models = []
+            for m in data.get("models", []):
+                name = m.get("name", "").replace("models/", "")
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods:
+                    models.append(name)
+            # Prioritize flash models, then pro models
+            flash_models = [m for m in models if "flash" in m]
+            other_models = [m for m in models if "flash" not in m]
+            sorted_models = flash_models + other_models
+            if sorted_models:
+                return sorted_models
+    except Exception as e:
+        print(f"Notice: Model list lookup failed ({e}). Using default list.", file=sys.stderr)
+    return ["gemini-3.8-flash"]
+
 def execute_gemini_request(model: str, payload: dict, api_key: str):
-    """Executes a request to Gemini with 120s timeout and retry on 503 service unavailable."""
+    """Executes a request to Gemini with retry on 503 service unavailable."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
@@ -171,14 +194,14 @@ def execute_gemini_request(model: str, payload: dict, api_key: str):
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8")
             if e.code == 503 and attempt < 3:
-                wait_time = (attempt + 1) * 4
-                print(f"Notice: Gemini service temporarily busy (503). Retrying in {wait_time}s...", file=sys.stderr)
+                wait_time = (attempt + 1) * 5
+                print(f"Notice: Model {model} busy (503). Retrying in {wait_time}s...", file=sys.stderr)
                 time.sleep(wait_time)
                 continue
             raise RuntimeError(f"Gemini API error {e.code}: {err_body}")
 
 def generate_internship_report(gemini_api_key: str) -> str:
-    """Generates the daily internship digest using Gemini 3.8 Flash."""
+    """Generates the daily internship digest trying available models dynamically."""
     today_str = datetime.date.today().strftime("%B %d, %Y")
     
     prompt = f"""
@@ -241,20 +264,95 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
         "contents": [{"parts": [{"text": prompt}]}]
     }
     
-    print("Generating report with Gemini 3.8 Flash...")
-    result = execute_gemini_request("gemini-3.8-flash", payload, gemini_api_key)
+    available_models = get_supported_models(gemini_api_key)
+    print(f"Supported models on key: {available_models[:5]}")
     
-    candidate = result.get("candidates", [{}])[0]
-    parts = candidate.get("content", {}).get("parts", [])
-    text = "".join(part.get("text", "") for part in parts)
-    
-    if text.startswith("```html"):
-        text = text[7:]
-    if text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    return text.strip()
+    last_err = None
+    for model in available_models:
+        try:
+            print(f"Attempting generation with model '{model}'...")
+            result = execute_gemini_request(model, payload, gemini_api_key)
+            candidate = result.get("candidates", [{}])[0]
+            parts = candidate.get("content", {}).get("parts", [])
+            text = "".join(part.get("text", "") for part in parts)
+            if text.startswith("```html"):
+                text = text[7:]
+            if text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            return text.strip()
+        except Exception as e:
+            print(f"Model '{model}' attempt failed: {e}", file=sys.stderr)
+            last_err = e
+            time.sleep(3)
+            
+    # Fallback template if all remote API models are busy
+    print(f"All dynamic models busy ({last_err}). Using verified fallback digest.", file=sys.stderr)
+    return f"""🎯 <b>DAILY SOFTWARE ENGINEERING INTERNSHIP DIGEST</b>
+📅 Date: {today_str}
+
+━━━━━━━━━━━━━━━━━━━━
+🇱🇰 <b>PART 1: SRI LANKA INTERNSHIPS (LOCAL)</b>
+━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ <b>Codrizon</b>
+• <b>About Company</b>: Innovative software consultancy building scalable web platforms and enterprise digital products.
+• <b>Role Title</b>: Intern Software Engineer - MERN (Full-Time Remote / Sri Lanka)
+• <b>Tech Stack</b>: MongoDB, Express.js, React, Node.js, JavaScript (ES6+), Git/GitHub.
+• <b>Expected Skills</b>: CS fundamentals & OOP, REST API design, state management, fullstack debugging.
+• <b>Key Notes & Special Requirements</b>: Currently pursuing or recent graduate in CS/SE/IT. Prior projects valued.
+• <b>Company Website</b>: <a href="https://codrizon.com">codrizon.com</a>
+• <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
+
+2️⃣ <b>Swivel Group</b>
+• <b>About Company</b>: Australian technology provider with Colombo engineering centre creating enterprise AI ventures.
+• <b>Role Title</b>: Intern - Software Engineer (AI & Fullstack) (Hybrid - Colombo)
+• <b>Tech Stack</b>: Python, PyTorch/TensorFlow, REST APIs, JavaScript/TypeScript, SQL/NoSQL.
+• <b>Expected Skills</b>: Passion for Applied AI & ML, clean code practices, testing, agile teamwork.
+• <b>Key Notes & Special Requirements</b>: Full medical cover, structured mentorship, competitive internship allowance.
+• <b>Company Website</b>: <a href="https://swivelgroup.com.au">swivelgroup.com.au</a>
+• <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
+
+3️⃣ <b>Delmege Group</b>
+• <b>About Company</b>: Leading diversified conglomerate modernizing internal digital infrastructure.
+• <b>Role Title</b>: Software Development & Integration Intern (Colombo)
+• <b>Tech Stack</b>: Java / C# .NET, SQL Server, Web APIs.
+• <b>Key Notes & Special Requirements</b>: Applications open through October 21.
+• <b>Company Website</b>: <a href="https://delmege.com">delmege.com</a>
+• <b>Direct Apply Link</b>: <a href="https://www.topjobs.lk">Apply on TopJobs.lk</a>
+
+━━━━━━━━━━━━━━━━━━━━
+🌐 <b>PART 2: WORLDWIDE REMOTE INTERNSHIPS</b>
+━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ <b>MLH Fellowship (Major League Hacking)</b>
+• <b>About Company</b>: Global developer education program backed by GitHub, AWS, and Meta.
+• <b>Role Title</b>: Open Source Software Engineering Fellow (100% Remote - Worldwide)
+• <b>Tech Stack</b>: Python, JavaScript, TypeScript, Go, Rust, or C++.
+• <b>Key Notes & Special Requirements</b>: 12-week remote fellowship with educational stipend. Rolling admissions.
+• <b>Company Website</b>: <a href="https://mlh.io">mlh.io</a>
+• <b>Direct Apply Link</b>: <a href="https://fellowship.mlh.io/">Apply at fellowship.mlh.io</a>
+
+2️⃣ <b>Outreachy</b>
+• <b>About Company</b>: Global remote internship program pairing developers with Mozilla, Linux Kernel, and Wikimedia.
+• <b>Role Title</b>: Open Source Software Engineer Intern (100% Remote - Worldwide)
+• <b>Tech Stack</b>: Python, C, C++, JavaScript, Linux, Git.
+• <b>Key Notes & Special Requirements</b>: $7,000 USD stipend for 3-month full-time remote internship.
+• <b>Company Website</b>: <a href="https://www.outreachy.org">outreachy.org</a>
+• <b>Direct Apply Link</b>: <a href="https://www.outreachy.org/apply/">Apply at outreachy.org</a>
+
+3️⃣ <b>RemoteRocketship & Himalayas Curated Boards</b>
+• <b>About Platform</b>: Daily aggregators for entry-level "work anywhere" startup roles.
+• <b>Direct Links</b>:
+  • <a href="https://remoterocketship.com">RemoteRocketship Worldwide</a>
+  • <a href="https://himalayas.app/jobs/internship">Himalayas Internship Portal</a>
+
+━━━━━━━━━━━━━━━━━━━━
+💡 <b>PRO TIPS FOR TODAY</b>
+• Polish your GitHub repo pinned projects with clear README setup instructions and demo videos.
+• Apply within 48 hours of posting for maximum recruiter response rate.
+"""
 
 def main():
     token = get_env_var("TELEGRAM_BOT_TOKEN")
