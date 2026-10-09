@@ -163,20 +163,33 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
     try:
         with urllib.request.urlopen(req) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-            candidate = result.get("candidates", [{}])[0]
-            parts = candidate.get("content", {}).get("parts", [])
-            text = "".join(part.get("text", "") for part in parts)
-            # Remove any unwanted triple backticks
-            if text.startswith("```html"):
-                text = text[7:]
-            if text.startswith("```"):
-                text = text[3:]
-            if text.endswith("```"):
-                text = text[:-3]
-            return text.strip()
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8")
-        raise RuntimeError(f"Gemini API request failed ({e.code}): {error_body}")
+        if e.code in (400, 429):
+            print(f"Notice: Google Search grounding not enabled on free tier ({e.code}). Retrying standard Gemini generation...", file=sys.stderr)
+            # Remove tools and retry standard generation
+            payload.pop("tools", None)
+            data = json.dumps(payload).encode("utf-8")
+            retry_req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(retry_req) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as e2:
+                err2 = e2.read().decode("utf-8")
+                raise RuntimeError(f"Gemini API request failed ({e2.code}): {err2}")
+        else:
+            raise RuntimeError(f"Gemini API request failed ({e.code}): {error_body}")
+
+    candidate = result.get("candidates", [{}])[0]
+    parts = candidate.get("content", {}).get("parts", [])
+    text = "".join(part.get("text", "") for part in parts)
+    if text.startswith("```html"):
+        text = text[7:]
+    if text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
 
 def main():
     token = get_env_var("TELEGRAM_BOT_TOKEN")
