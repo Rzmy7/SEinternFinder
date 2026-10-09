@@ -25,6 +25,17 @@ def get_env_var(name: str):
             pass
     return None
 
+def clean_fences(text: str) -> str:
+    """Strips markdown code blocks like ```html from LLM output."""
+    t = text.strip()
+    if t.startswith("```html"):
+        t = t[7:]
+    if t.startswith("```"):
+        t = t[3:]
+    if t.endswith("```"):
+        t = t[:-3]
+    return t.strip()
+
 def load_subscribers() -> list:
     """Loads subscribers list from subscribers.json."""
     if os.path.exists(SUBSCRIBERS_FILE):
@@ -158,7 +169,7 @@ def send_telegram_message(token: str, chat_id: str, text: str, parse_mode: str =
                 return json.loads(resp.read().decode("utf-8"))
         raise RuntimeError(f"Telegram API error {e.code}: {error_body}")
 
-def get_supported_models(api_key: str) -> list:
+def get_supported_gemini_models(api_key: str) -> list:
     """Queries ModelService to get currently available models supporting generateContent."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
     try:
@@ -171,14 +182,13 @@ def get_supported_models(api_key: str) -> list:
                 methods = m.get("supportedGenerationMethods", [])
                 if "generateContent" in methods:
                     models.append(name)
-            # Prioritize flash models, then pro models
             flash_models = [m for m in models if "flash" in m]
             other_models = [m for m in models if "flash" not in m]
             sorted_models = flash_models + other_models
             if sorted_models:
                 return sorted_models
     except Exception as e:
-        print(f"Notice: Model list lookup failed ({e}). Using default list.", file=sys.stderr)
+        print(f"Notice: Gemini model list lookup failed ({e}). Using default.", file=sys.stderr)
     return ["gemini-3.8-flash"]
 
 def execute_gemini_request(model: str, payload: dict, api_key: str):
@@ -200,8 +210,38 @@ def execute_gemini_request(model: str, payload: dict, api_key: str):
                 continue
             raise RuntimeError(f"Gemini API error {e.code}: {err_body}")
 
-def generate_internship_report(gemini_api_key: str) -> str:
-    """Generates the daily internship digest trying available models dynamically."""
+def execute_nvidia_request(prompt: str, nvidia_api_key: str) -> str:
+    """Executes a completion request using NVIDIA NIM (DeepSeek model)."""
+    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    payload = {
+        "model": "deepseek-ai/deepseek-v4.1-flash",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "max_tokens": 4096,
+        "stream": False
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {nvidia_api_key}"
+        }
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        res = json.loads(resp.read().decode("utf-8"))
+        choices = res.get("choices", [])
+        if choices:
+            content = choices[0].get("message", {}).get("content", "")
+            return clean_fences(content)
+        raise RuntimeError("No choices returned from NVIDIA NIM")
+
+def generate_internship_report(gemini_api_key: str = None, nvidia_api_key: str = None) -> str:
+    """Generates the daily internship digest with multi-provider fallback."""
     today_str = datetime.date.today().strftime("%B %d, %Y")
     
     prompt = f"""
@@ -260,35 +300,36 @@ For each listing:
 Ensure all URLs in <a href="..."> are valid and active web URLs.
 """
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
-    }
-    
-    available_models = get_supported_models(gemini_api_key)
-    print(f"Supported models on key: {available_models[:5]}")
-    
-    last_err = None
-    for model in available_models:
+    # 1. PRIMARY PROVIDER: Google Gemini
+    if gemini_api_key:
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        available_models = get_supported_gemini_models(gemini_api_key)
+        print(f"Supported Gemini models: {available_models[:5]}")
+        
+        for model in available_models:
+            try:
+                print(f"Attempting generation with Gemini '{model}'...")
+                result = execute_gemini_request(model, payload, gemini_api_key)
+                candidate = result.get("candidates", [{}])[0]
+                parts = candidate.get("content", {}).get("parts", [])
+                text = "".join(part.get("text", "") for part in parts)
+                return clean_fences(text)
+            except Exception as e:
+                print(f"Gemini model '{model}' failed: {e}", file=sys.stderr)
+                time.sleep(3)
+
+    # 2. SECONDARY FALLBACK PROVIDER: NVIDIA NIM (DeepSeek)
+    if nvidia_api_key:
         try:
-            print(f"Attempting generation with model '{model}'...")
-            result = execute_gemini_request(model, payload, gemini_api_key)
-            candidate = result.get("candidates", [{}])[0]
-            parts = candidate.get("content", {}).get("parts", [])
-            text = "".join(part.get("text", "") for part in parts)
-            if text.startswith("```html"):
-                text = text[7:]
-            if text.startswith("```"):
-                text = text[3:]
-            if text.endswith("```"):
-                text = text[:-3]
-            return text.strip()
+            print("Gemini unavailable. Falling back to NVIDIA NIM (deepseek-ai/deepseek-v4.1-flash)...")
+            res = execute_nvidia_request(prompt, nvidia_api_key)
+            if res:
+                return res
         except Exception as e:
-            print(f"Model '{model}' attempt failed: {e}", file=sys.stderr)
-            last_err = e
-            time.sleep(3)
-            
-    # Fallback template if all remote API models are busy
-    print(f"All dynamic models busy ({last_err}). Using verified fallback digest.", file=sys.stderr)
+            print(f"NVIDIA NIM fallback failed: {e}", file=sys.stderr)
+
+    # 3. TERTIARY FALLBACK: Verified Static Digest
+    print("All cloud LLM providers busy. Using verified safety digest.", file=sys.stderr)
     return f"""🎯 <b>DAILY SOFTWARE ENGINEERING INTERNSHIP DIGEST</b>
 📅 Date: {today_str}
 
@@ -358,13 +399,14 @@ def main():
     token = get_env_var("TELEGRAM_BOT_TOKEN")
     primary_chat_id = get_env_var("TELEGRAM_CHAT_ID")
     gemini_api_key = get_env_var("GEMINI_API_KEY")
+    nvidia_api_key = get_env_var("NVIDIA_API_KEY")
     
     if not token:
         print("Error: Missing TELEGRAM_BOT_TOKEN.", file=sys.stderr)
         sys.exit(1)
         
-    if not gemini_api_key:
-        print("Error: Missing GEMINI_API_KEY. Get a free API key at https://aistudio.google.com/", file=sys.stderr)
+    if not gemini_api_key and not nvidia_api_key:
+        print("Error: Must provide at least one AI key: GEMINI_API_KEY or NVIDIA_API_KEY.", file=sys.stderr)
         sys.exit(1)
         
     # 1. Load existing subscribers and ensure primary chat ID is included
@@ -385,8 +427,8 @@ def main():
         
     print(f"Active subscribers to receive report: {len(updated_subscribers)} {updated_subscribers}")
     
-    # 3. Generate the daily report once
-    report_text = generate_internship_report(gemini_api_key)
+    # 3. Generate the daily report once (with multi-provider fallback)
+    report_text = generate_internship_report(gemini_api_key, nvidia_api_key)
     chunks = chunk_text(report_text)
     
     # 4. Broadcast to each subscriber
