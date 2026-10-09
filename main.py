@@ -245,35 +245,34 @@ def generate_internship_report(gemini_api_key: str = None, nvidia_api_key: str =
     today_str = datetime.date.today().strftime("%B %d, %Y")
     
     prompt = f"""
-You are an expert career research assistant specializing in the Sri Lankan tech industry.
+You are an expert career research assistant specializing in the Sri Lankan tech ecosystem.
 Today's date is {today_str}.
 
 Compile an exhaustive, highly detailed daily Software Engineering Internship Digest.
 
-CRITICAL INSTRUCTIONS ON FOCUS:
-- THE PRIMARY FOCUS IS SRI LANKA (75%+ OF THE REPORT).
-- DO NOT ONLY LIST FAMOUS TECH GIANTS! You MUST actively feature early-stage tech startups, boutique development agencies, small software houses, and fast-growing product teams in Sri Lanka.
-- Include opportunities across various technologies: MERN/MEAN, Python/Django, PHP/Laravel, React/Next.js, Flutter/React Native, Java, .NET/C#, and AI/Data engineering.
-- Cover all types of Sri Lankan companies:
-  * Local Startups & Boutique Studios: Codrizon, Coullax, Softmint Solutions, ClusterX, Kingteza, Agro Ventures, Thyaga, Eyepax, Surge Viral, Octave, Kreativ, Calcey, Rootcode.
+CRITICAL INSTRUCTIONS ON FOCUS & RATIO:
+- ABSOLUTE #1 PRIORITY: SRI LANKA LOCAL INTERNSHIPS (80%+ OF THE DIGEST).
+- The user is based in Sri Lanka and their primary goal is finding local SE internships.
+- Provide at least 5-6 detailed Sri Lankan listings covering the entire local landscape:
+  * Local Startups, Boutique Studios & SME Dev Shops: Codrizon, Coullax, Softmint Solutions, ClusterX, Kingteza, Agro Ventures, Thyaga, Eyepax, Surge Viral, Octave, Kreativ, Calcey, Rootcode.
   * Established Tech & Enterprise: Delmege Group, WSO2, 99x, Creative Software, Sysco LABS, Epic Lanka, IFS.
-- Include direct apply links or platform references (Rooster.jobs, TopJobs.lk, ITPro.lk, LinkedIn).
-- Include 2-3 prominent worldwide remote options open to international applicants.
+- Do NOT just list famous names. Dig deep into small startups, early-stage product teams, and lesser-known agencies across Colombo and remote-in-Sri-Lanka roles.
+- PART 2 (Worldwide Remote) is strictly a secondary bonus: include only 2 curated global remote listings.
 
 CRITICAL OUTPUT FORMAT REQUIREMENTS:
 - Output ONLY valid Telegram HTML formatting (using <b>, <i>, <a> tags).
 - Do NOT wrap your output in markdown code blocks like ```html. Output raw HTML directly.
 - The report MUST strictly follow this structure:
 
-🎯 <b>DAILY SRI LANKA &amp; GLOBAL SE INTERNSHIP DIGEST</b>
+🎯 <b>🇱🇰 SRI LANKA SE INTERNSHIP DIGEST (DAILY LOCAL FOCUS)</b>
 📅 Date: {today_str}
 
 ━━━━━━━━━━━━━━━━━━━━
-🇱🇰 <b>PART 1: SRI LANKA INTERNSHIPS (PRIMARY FOCUS)</b>
+🇱🇰 <b>PART 1: SRI LANKA INTERNSHIPS (CORE FOCUS - 80%)</b>
 ━━━━━━━━━━━━━━━━━━━━
 
 <b>🚀 SECTION 1A: LOCAL STARTUPS &amp; BOUTIQUE STUDIOS</b>
-(Feature 3-4 small/growing startups or boutique dev agencies)
+(Feature 3-4 small/growing startups or boutique dev agencies in Sri Lanka)
 For each listing:
 • <b>Company Name</b>: [Company Name &amp; Startup Stage/Type]
 • <b>About Company</b>: [1-2 sentences on what they build/do]
