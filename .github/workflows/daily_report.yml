@@ -2,8 +2,8 @@ name: Daily SE Internship Digest
 
 on:
   schedule:
-    # 8:00 AM Asia/Colombo (UTC+5:30) is 2:30 AM UTC
-    - cron: '30 2 * * *'
+    # 7:48 AM Asia/Colombo (UTC+5:30) is 2:18 AM UTC (off-peak minute to avoid GitHub runner queue delays)
+    - cron: '18 2 * * *'
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab anytime
 
 permissions:
