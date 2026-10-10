@@ -45,7 +45,34 @@ def clean_fences(text: str) -> str:
     return t.strip()
 
 def load_subscribers() -> list:
-    """Loads subscribers list from subscribers.json."""
+    """Loads subscribers list from private GitHub Gist, falling back to local file."""
+    gist_id = get_env_var("SUBSCRIBERS_GIST_ID")
+    gist_token = get_env_var("GIST_TOKEN")
+    
+    if gist_id and gist_token:
+        try:
+            url = f"https://api.github.com/gists/{gist_id}"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"token {gist_token}",
+                    "Accept": "application/vnd.github.v3+json",
+                    "User-Agent": "SE-Intern-Bot"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                files = data.get("files", {})
+                if "subscribers.json" in files:
+                    content = files["subscribers.json"].get("content", "")
+                    loaded = json.loads(content)
+                    if isinstance(loaded, list):
+                        subs = [int(x) for x in loaded if str(x).lstrip("-").isdigit()]
+                        print(f"Loaded {len(subs)} subscriber(s) securely from private GitHub Gist.")
+                        return subs
+        except Exception as e:
+            print(f"Notice: Failed to fetch subscribers from Gist ({e}). Checking local fallback.", file=sys.stderr)
+
     if os.path.exists(SUBSCRIBERS_FILE):
         try:
             with open(SUBSCRIBERS_FILE, "r", encoding="utf-8") as f:
@@ -57,12 +84,42 @@ def load_subscribers() -> list:
     return []
 
 def save_subscribers(subs: list):
-    """Saves unique subscribers list to subscribers.json."""
+    """Saves unique subscribers list to private GitHub Gist and local file."""
     unique_subs = sorted(list(set(subs)))
+    content_str = json.dumps(unique_subs, indent=2)
+    
+    gist_id = get_env_var("SUBSCRIBERS_GIST_ID")
+    gist_token = get_env_var("GIST_TOKEN")
+    
+    if gist_id and gist_token:
+        try:
+            url = f"https://api.github.com/gists/{gist_id}"
+            payload = {
+                "files": {
+                    "subscribers.json": {
+                        "content": content_str
+                    }
+                }
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"token {gist_token}",
+                    "Accept": "application/vnd.github.v3+json",
+                    "Content-Type": "application/json",
+                    "User-Agent": "SE-Intern-Bot"
+                },
+                method="PATCH"
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                print(f"Saved {len(unique_subs)} subscriber(s) securely to private GitHub Gist.")
+        except Exception as e:
+            print(f"Error saving subscribers to Gist ({e})", file=sys.stderr)
+
     try:
         with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(unique_subs, f, indent=2)
-        print(f"Saved {len(unique_subs)} subscriber(s) to subscribers.json.")
+            f.write(content_str)
     except Exception as e:
         print(f"Error saving {SUBSCRIBERS_FILE}: {e}", file=sys.stderr)
 
