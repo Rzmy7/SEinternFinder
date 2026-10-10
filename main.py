@@ -97,7 +97,7 @@ def sync_telegram_subscribers(token: str, current_subs: list) -> list:
                     "👋 <b>Welcome!</b>\n\n"
                     "You are now subscribed to the <b>Daily Software Engineering Internship Digest</b>!\n\n"
                     "🎯 Every morning, you will receive active Software Engineering internship opportunities "
-                    "scraped live from Sri Lankan tech companies and global teams.\n\n"
+                    "scraped live across Sri Lankan tech companies and global teams.\n\n"
                     "<i>(Send /stop at any time to unsubscribe)</i>"
                 )
                 try:
@@ -141,7 +141,6 @@ def scrape_live_itpro_jobs() -> list:
                 posted = re.sub(r'<[^>]+>', ' ', date_m.group(1)).strip() if date_m else ""
                 
                 t_low = title.lower()
-                # Prioritize SE, web, AI, cloud, QA, and dev
                 if any(k in t_low for k in ['developer', 'software', 'engineer', 'ai', 'data', 'web', 'full stack', 'qa', 'frontend', 'backend', 'devops', 'tech']):
                     jobs.append({
                         "portal": "ITPro.lk",
@@ -195,11 +194,58 @@ def scrape_live_topjobs() -> list:
     print(f"Scraped {len(jobs)} relevant listings from TopJobs.lk")
     return jobs
 
+def scrape_live_rooster_playwright() -> list:
+    """Scrapes dynamic React startup listings from Rooster.jobs using Playwright."""
+    print("Scraping dynamic tech & startup listings from Rooster.jobs via Playwright...")
+    jobs = []
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto("https://rooster.jobs", timeout=30000)
+            page.wait_for_timeout(4000)  # Allow client-side React hydration
+            
+            links = page.query_selector_all("a[href*='/jobs/']")
+            seen = set()
+            for a in links:
+                href = a.get_attribute("href")
+                text = a.inner_text().strip()
+                if not href or text.lower() == "apply" or not text:
+                    continue
+                if href in seen:
+                    continue
+                seen.add(href)
+                
+                parent = a.evaluate_handle("el => el.closest('div[class*=\"card\"], div[class*=\"item\"], li') || el.parentElement")
+                card_text = parent.as_element().inner_text() if parent and parent.as_element() else text
+                
+                # Check for tech, software, developer, intern, or engineer keywords
+                combined_low = (text + " " + card_text).lower()
+                if any(k in combined_low for k in ['software', 'developer', 'engineer', 'intern', 'data', 'web', 'full stack', 'tech', 'cyber']):
+                    full_url = f"https://rooster.jobs{href}" if href.startswith("/") else href
+                    jobs.append({
+                        "portal": "Rooster.jobs",
+                        "company": "Startup / Dev Studio",
+                        "title": text,
+                        "location": "Sri Lanka",
+                        "posted": "Recent",
+                        "url": full_url
+                    })
+            browser.close()
+    except Exception as e:
+        print(f"Notice: Rooster.jobs Playwright scraper encountered notice ({e}). Continuing gracefully.", file=sys.stderr)
+    print(f"Scraped {len(jobs)} relevant startup listings from Rooster.jobs")
+    return jobs
+
 def get_scraped_jobs_payload() -> str:
-    """Combines live scraped jobs into structured text for LLM contextualization."""
+    """Combines live scraped jobs from all portals into structured text for LLM contextualization."""
     itpro = scrape_live_itpro_jobs()
     topjobs = scrape_live_topjobs()
-    all_jobs = itpro[:8] + topjobs[:10]
+    rooster = scrape_live_rooster_playwright()
+    
+    # Balance across portals
+    all_jobs = itpro[:8] + topjobs[:8] + rooster[:6]
     
     if not all_jobs:
         return "No live scraped jobs found at this moment."
@@ -344,7 +390,7 @@ def generate_internship_report(gemini_api_key: str = None, nvidia_api_key: str =
     """Generates the daily internship digest using live scraped job data and multi-provider AI formatting."""
     today_str = datetime.date.today().strftime("%B %d, %Y")
     
-    # 1. Scrape real live job listings directly from web portals
+    # 1. Scrape real live job listings directly from web portals (ITPro, TopJobs, Rooster via Playwright)
     scraped_jobs_text = get_scraped_jobs_payload()
     print("Scraped live jobs data extracted. Preparing prompt...")
     
@@ -352,7 +398,7 @@ def generate_internship_report(gemini_api_key: str = None, nvidia_api_key: str =
 You are an expert career research assistant specializing in the Sri Lankan tech ecosystem.
 Today's date is {today_str}.
 
-We have just SCRAPED LIVE ACTIVE VACANCIES from Sri Lankan tech portals (ITPro.lk & TopJobs.lk).
+We have just SCRAPED LIVE ACTIVE VACANCIES from Sri Lankan tech portals (ITPro.lk, TopJobs.lk, and Rooster.jobs).
 Here are the actual live jobs currently accepting applications:
 ----------------------------------------
 {scraped_jobs_text}
@@ -364,11 +410,11 @@ You MUST prioritize and feature the REAL SCRAPED JOBS listed above so that users
 
 CRITICAL INSTRUCTIONS ON FOCUS & RATIO:
 - ABSOLUTE #1 PRIORITY: SRI LANKA LOCAL INTERNSHIPS (80%+ OF THE DIGEST).
-- Part 1 must feature at least 5-6 Sri Lankan listings directly derived from the REAL SCRAPED listings above (e.g. Nuwali Digital Solutions, PrimeWave Lab, Ravigno, Med Cube, Delmege, Epic Lanka, etc.).
+- Part 1 must feature at least 6-7 Sri Lankan listings directly derived from the REAL SCRAPED listings above (from Rooster.jobs startups, ITPro.lk, and TopJobs.lk).
 - Categorize them clearly:
-  * Section 1A: Startups & Boutique Studios
-  * Section 1B: Established Tech & Enterprise Firms
-- Preserve the exact application links (<a href="[URL]">Apply Here</a>) from the scraped data so applicants can immediately apply.
+  * Section 1A: Startups & Boutique Studios (Feature Rooster.jobs and ITPro.lk startup openings)
+  * Section 1B: Established Tech & Enterprise Firms (Feature TopJobs.lk and corporate tech openings)
+- Preserve the exact application links (<a href="[REAL_SCRAPED_URL]">Apply Here</a>) from the scraped data so applicants can immediately apply.
 - Part 2 (Worldwide Remote): Include 2 curated global remote startup / fellowship opportunities (e.g. MLH Fellowship, Outreachy, or YC Work at a Startup).
 
 CRITICAL OUTPUT FORMAT REQUIREMENTS:
@@ -403,9 +449,9 @@ For each listing:
 • <b>Direct Apply Link</b>: <a href="[REAL_SCRAPED_URL]">Apply Here</a>
 
 <b>🔎 SRI LANKA DAILY JOB PORTAL SHORTCUTS:</b>
+• <a href="https://rooster.jobs">Rooster.jobs (Sri Lanka Tech &amp; Startup Board)</a>
 • <a href="https://itpro.lk/jobs/internship/">ITPro.lk (Dedicated Sri Lanka IT Roles)</a>
 • <a href="https://topjobs.lk/applicant/vacancybyfunctionalarea.jsp?FA=SDQ">TopJobs.lk (IT &amp; Software Openings)</a>
-• <a href="https://rooster.jobs">Rooster.jobs (Sri Lanka Tech &amp; Startup Board)</a>
 • <a href="https://internhub.lk">InternHub.lk (Undergraduate Internships)</a>
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -507,9 +553,9 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
 • <b>Direct Apply Link</b>: <a href="https://topjobs.lk/applicant/vacancybyfunctionalarea.jsp?FA=SDQ">Apply on TopJobs.lk</a>
 
 <b>🔎 SRI LANKA DAILY JOB PORTAL SHORTCUTS:</b>
+• <a href="https://rooster.jobs">Rooster.jobs (Sri Lanka Tech &amp; Startup Board)</a>
 • <a href="https://itpro.lk/jobs/internship/">ITPro.lk (Dedicated Sri Lanka IT Roles)</a>
 • <a href="https://topjobs.lk/applicant/vacancybyfunctionalarea.jsp?FA=SDQ">TopJobs.lk (IT &amp; Software Openings)</a>
-• <a href="https://rooster.jobs">Rooster.jobs (Sri Lanka Tech &amp; Startup Board)</a>
 • <a href="https://internhub.lk">InternHub.lk (Undergraduate Internships)</a>
 """
 
@@ -539,19 +585,18 @@ def main():
     updated_subscribers = sync_telegram_subscribers(token, subscribers)
     save_subscribers(updated_subscribers)
     
-    if not updated_subscribers:
-        print("No subscribers found to send report to. Exiting.")
-        sys.exit(0)
-        
-    print(f"Active subscribers to receive report: {len(updated_subscribers)} {updated_subscribers}")
+    # 3. SAFETY MODE FOR THIS TEST RUN: Send ONLY to admin (you), not other subscribers
+    admin_id = int(primary_chat_id) if primary_chat_id and str(primary_chat_id).lstrip("-").isdigit() else 1093696001
+    recipients = [admin_id]
+    print(f"🔒 TEST RUN MODE: Sending digest EXCLUSIVELY to admin {admin_id}. (Skipping {len(updated_subscribers)-1} other subscribers during test)")
     
-    # 3. Generate the daily report once (with multi-source live scraper + AI formatting)
+    # 4. Generate the daily report once (with multi-source Playwright scraper + AI formatting)
     report_text = generate_internship_report(gemini_api_key, nvidia_api_key)
     chunks = chunk_text(report_text)
     
-    # 4. Broadcast to all active subscribers
-    for sub_id in updated_subscribers:
-        print(f"Sending live scraped digest to subscriber {sub_id}...")
+    # 5. Broadcast exclusively to admin
+    for sub_id in recipients:
+        print(f"Sending live scraped digest to admin {sub_id}...")
         for i, chunk in enumerate(chunks, 1):
             try:
                 res = send_telegram_message(token, str(sub_id), chunk, parse_mode="HTML")
