@@ -585,18 +585,19 @@ def main():
     updated_subscribers = sync_telegram_subscribers(token, subscribers)
     save_subscribers(updated_subscribers)
     
-    # 3. SAFETY MODE FOR THIS TEST RUN: Send ONLY to admin (you), not other subscribers
-    admin_id = int(primary_chat_id) if primary_chat_id and str(primary_chat_id).lstrip("-").isdigit() else 1093696001
-    recipients = [admin_id]
-    print(f"🔒 TEST RUN MODE: Sending digest EXCLUSIVELY to admin {admin_id}. (Skipping {len(updated_subscribers)-1} other subscribers during test)")
+    if not updated_subscribers:
+        print("No subscribers found to send report to. Exiting.")
+        sys.exit(0)
+        
+    print(f"Active subscribers to receive report: {len(updated_subscribers)} {updated_subscribers}")
     
-    # 4. Generate the daily report once (with multi-source Playwright scraper + AI formatting)
+    # 3. Generate the daily report once (with multi-source Playwright scraper + AI formatting)
     report_text = generate_internship_report(gemini_api_key, nvidia_api_key)
     chunks = chunk_text(report_text)
     
-    # 5. Broadcast exclusively to admin
-    for sub_id in recipients:
-        print(f"Sending live scraped digest to admin {sub_id}...")
+    # 4. Broadcast to all active subscribers
+    for sub_id in updated_subscribers:
+        print(f"Sending live scraped digest to subscriber {sub_id}...")
         for i, chunk in enumerate(chunks, 1):
             try:
                 res = send_telegram_message(token, str(sub_id), chunk, parse_mode="HTML")
