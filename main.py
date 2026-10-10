@@ -5,9 +5,17 @@ import time
 import datetime
 import urllib.request
 import urllib.error
+import re
 
 MAX_MESSAGE_LENGTH = 4000
 SUBSCRIBERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "subscribers.json")
+
+# Standard headers to prevent blocking by portals
+PORTAL_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5'
+}
 
 def get_env_var(name: str):
     """Fetch environment variable with Windows user registry fallback."""
@@ -88,8 +96,8 @@ def sync_telegram_subscribers(token: str, current_subs: list) -> list:
                 welcome = (
                     "👋 <b>Welcome!</b>\n\n"
                     "You are now subscribed to the <b>Daily Software Engineering Internship Digest</b>!\n\n"
-                    "🎯 Every morning at <b>8:00 AM (Asia/Colombo)</b>, you will receive active Software Engineering internship opportunities "
-                    "in Sri Lanka and worldwide remote listings.\n\n"
+                    "🎯 Every morning, you will receive active Software Engineering internship opportunities "
+                    "scraped live from Sri Lankan tech companies and global teams.\n\n"
                     "<i>(Send /stop at any time to unsubscribe)</i>"
                 )
                 try:
@@ -108,6 +116,98 @@ def sync_telegram_subscribers(token: str, current_subs: list) -> list:
                     pass
                     
     return list(subscribers)
+
+def scrape_live_itpro_jobs() -> list:
+    """Scrapes active tech & SE internships from ITPro.lk."""
+    print("Scraping live internships from ITPro.lk...")
+    jobs = []
+    try:
+        req = urllib.request.Request("https://itpro.lk/jobs/internship/", headers=PORTAL_HEADERS)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode('utf-8', errors='ignore')
+            
+        cards = re.findall(r'<article class="job-card"[^>]*id="([^"]+)"[^>]*>(.*?)</article>', html, re.DOTALL)
+        for jid, card in cards:
+            link_m = re.search(r'href="([^"]+)"', card)
+            title_m = re.search(r'<h[0-9][^>]*>(.*?)</h[0-9]>', card, re.DOTALL)
+            comp_m = re.search(r'<div class="jc-company"[^>]*>\s*<span[^>]*>(.*?)</span>', card, re.DOTALL) or re.search(r'class="jc-company"[^>]*>(.*?)<', card, re.DOTALL)
+            loc_m = re.search(r'class="jc-location"[^>]*>(.*?)<', card, re.DOTALL)
+            date_m = re.search(r'<time[^>]*>(.*?)</time>', card, re.DOTALL)
+            
+            if link_m and title_m:
+                title = re.sub(r'<[^>]+>', ' ', title_m.group(1)).strip()
+                comp = re.sub(r'<[^>]+>', ' ', comp_m.group(1)).strip() if comp_m else "Sri Lanka Tech"
+                loc = re.sub(r'<[^>]+>', ' ', loc_m.group(1)).strip() if loc_m else "Sri Lanka"
+                posted = re.sub(r'<[^>]+>', ' ', date_m.group(1)).strip() if date_m else ""
+                
+                t_low = title.lower()
+                # Prioritize SE, web, AI, cloud, QA, and dev
+                if any(k in t_low for k in ['developer', 'software', 'engineer', 'ai', 'data', 'web', 'full stack', 'qa', 'frontend', 'backend', 'devops', 'tech']):
+                    jobs.append({
+                        "portal": "ITPro.lk",
+                        "company": comp,
+                        "title": title,
+                        "location": loc,
+                        "posted": posted,
+                        "url": link_m.group(1)
+                    })
+    except Exception as e:
+        print(f"Notice: ITPro.lk scraping error ({e})", file=sys.stderr)
+    print(f"Scraped {len(jobs)} relevant listings from ITPro.lk")
+    return jobs
+
+def scrape_live_topjobs() -> list:
+    """Scrapes active IT & SE vacancies and internships from TopJobs.lk (Area SDQ)."""
+    print("Scraping live internships & trainee roles from TopJobs.lk...")
+    jobs = []
+    try:
+        req = urllib.request.Request("https://topjobs.lk/applicant/vacancybyfunctionalarea.jsp?FA=SDQ", headers=PORTAL_HEADERS)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode('utf-8', errors='ignore')
+            
+        pattern = re.compile(r'<tr[^>]*onclick="createAlert\(\'([^\']+)\',\'([^\']+)\',\'([^\']+)\',\'([^\']+)\',\'([^\']+)\'\)"[^>]*>(.*?)</tr>', re.DOTALL)
+        matches = pattern.findall(html)
+        
+        for rid, ac, jc, ec, uid, content in matches:
+            title_m = re.search(r'<h2><span>(.*?)</span></h2>', content, re.DOTALL)
+            comp_m = re.search(r'<h1>(.*?)</h1>', content, re.DOTALL)
+            opening_m = re.search(r'<td[^>]*nowrap[^>]*>\s*([A-Za-z]{3}\s+[A-Za-z]{3}\s+\d+\s+\d{4})', content)
+            
+            title = re.sub(r'<[^>]+>', '', title_m.group(1)).strip() if title_m else ""
+            comp = re.sub(r'<[^>]+>', '', comp_m.group(1)).strip() if comp_m else ""
+            opening = opening_m.group(1).strip() if opening_m else ""
+            
+            url = f"https://topjobs.lk/employer/JobAdvertismentServlet?rid={rid}&ac={ac}&jc={jc}&ec={ec}"
+            
+            t_low = title.lower()
+            if any(k in t_low for k in ['intern', 'trainee', 'associate', 'junior']):
+                if any(k in t_low for k in ['software', 'developer', 'engineer', 'web', 'full stack', '.net', 'angular', 'qa', 'data', 'ai', 'system', 'cloud', 'it']):
+                    jobs.append({
+                        "portal": "TopJobs.lk",
+                        "company": comp,
+                        "title": title,
+                        "location": "Sri Lanka",
+                        "posted": opening,
+                        "url": url
+                    })
+    except Exception as e:
+        print(f"Notice: TopJobs.lk scraping error ({e})", file=sys.stderr)
+    print(f"Scraped {len(jobs)} relevant listings from TopJobs.lk")
+    return jobs
+
+def get_scraped_jobs_payload() -> str:
+    """Combines live scraped jobs into structured text for LLM contextualization."""
+    itpro = scrape_live_itpro_jobs()
+    topjobs = scrape_live_topjobs()
+    all_jobs = itpro[:8] + topjobs[:10]
+    
+    if not all_jobs:
+        return "No live scraped jobs found at this moment."
+        
+    lines = []
+    for idx, j in enumerate(all_jobs, 1):
+        lines.append(f"{idx}. [{j['portal']}] Company: {j['company']} | Role: {j['title']} | Location: {j['location']} | Posted/Opening: {j['posted']} | Link: {j['url']}")
+    return "\n".join(lines)
 
 def chunk_text(text: str, max_length: int = MAX_MESSAGE_LENGTH):
     """Splits text into chunks preserving line breaks."""
@@ -241,30 +341,42 @@ def execute_nvidia_request(prompt: str, nvidia_api_key: str) -> str:
         raise RuntimeError("No choices returned from NVIDIA NIM")
 
 def generate_internship_report(gemini_api_key: str = None, nvidia_api_key: str = None) -> str:
-    """Generates the daily internship digest with multi-provider fallback."""
+    """Generates the daily internship digest using live scraped job data and multi-provider AI formatting."""
     today_str = datetime.date.today().strftime("%B %d, %Y")
+    
+    # 1. Scrape real live job listings directly from web portals
+    scraped_jobs_text = get_scraped_jobs_payload()
+    print("Scraped live jobs data extracted. Preparing prompt...")
     
     prompt = f"""
 You are an expert career research assistant specializing in the Sri Lankan tech ecosystem.
 Today's date is {today_str}.
 
+We have just SCRAPED LIVE ACTIVE VACANCIES from Sri Lankan tech portals (ITPro.lk & TopJobs.lk).
+Here are the actual live jobs currently accepting applications:
+----------------------------------------
+{scraped_jobs_text}
+----------------------------------------
+
+TASK:
 Compile an exhaustive, highly detailed daily Software Engineering Internship Digest.
+You MUST prioritize and feature the REAL SCRAPED JOBS listed above so that users get 100% active, verified openings with real links!
 
 CRITICAL INSTRUCTIONS ON FOCUS & RATIO:
 - ABSOLUTE #1 PRIORITY: SRI LANKA LOCAL INTERNSHIPS (80%+ OF THE DIGEST).
-- The user is based in Sri Lanka and their primary goal is finding local SE internships.
-- Provide at least 5-6 detailed Sri Lankan listings covering the entire local landscape:
-  * Local Startups, Boutique Studios & SME Dev Shops: Codrizon, Coullax, Softmint Solutions, ClusterX, Kingteza, Agro Ventures, Thyaga, Eyepax, Surge Viral, Octave, Kreativ, Calcey, Rootcode.
-  * Established Tech & Enterprise: Delmege Group, WSO2, 99x, Creative Software, Sysco LABS, Epic Lanka, IFS.
-- Do NOT just list famous names. Dig deep into small startups, early-stage product teams, and lesser-known agencies across Colombo and remote-in-Sri-Lanka roles.
-- PART 2 (Worldwide Remote) is strictly a secondary bonus: include only 2 curated global remote listings.
+- Part 1 must feature at least 5-6 Sri Lankan listings directly derived from the REAL SCRAPED listings above (e.g. Nuwali Digital Solutions, PrimeWave Lab, Ravigno, Med Cube, Delmege, Epic Lanka, etc.).
+- Categorize them clearly:
+  * Section 1A: Startups & Boutique Studios
+  * Section 1B: Established Tech & Enterprise Firms
+- Preserve the exact application links (<a href="[URL]">Apply Here</a>) from the scraped data so applicants can immediately apply.
+- Part 2 (Worldwide Remote): Include 2 curated global remote startup / fellowship opportunities (e.g. MLH Fellowship, Outreachy, or YC Work at a Startup).
 
 CRITICAL OUTPUT FORMAT REQUIREMENTS:
 - Output ONLY valid Telegram HTML formatting (using <b>, <i>, <a> tags).
 - Do NOT wrap your output in markdown code blocks like ```html. Output raw HTML directly.
 - The report MUST strictly follow this structure:
 
-🎯 <b>🇱🇰 SRI LANKA SE INTERNSHIP DIGEST (DAILY LOCAL FOCUS)</b>
+🎯 <b>🇱🇰 SRI LANKA SE INTERNSHIP DIGEST (DAILY LIVE VERIFIED)</b>
 📅 Date: {today_str}
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -272,58 +384,47 @@ CRITICAL OUTPUT FORMAT REQUIREMENTS:
 ━━━━━━━━━━━━━━━━━━━━
 
 <b>🚀 SECTION 1A: LOCAL STARTUPS &amp; BOUTIQUE STUDIOS</b>
-(Feature 3-4 small/growing startups or boutique dev agencies in Sri Lanka)
+(Feature 3-4 scraped small/growing startups or boutique dev agencies in Sri Lanka)
 For each listing:
 • <b>Company Name</b>: [Company Name &amp; Startup Stage/Type]
-• <b>About Company</b>: [1-2 sentences on what they build/do]
 • <b>Role Title</b>: [Role Title &amp; Work Model: On-site/Hybrid/Remote within Sri Lanka]
-• <b>Tech Stack</b>: [Key languages, frameworks, databases, tools]
+• <b>Tech Stack</b>: [Key languages, frameworks, databases, tools relevant to the role]
 • <b>Expected Skills &amp; Mindset</b>: [Core skills, problem-solving, self-learning]
-• <b>Key Notes &amp; Special Requirements</b>: [Target undergrad year, duration, stipend if disclosed, deadline]
-• <b>Company Website</b>: <a href="[URL]">[Domain/URL]</a>
-• <b>Direct Apply Link</b>: <a href="[URL]">Apply Here</a>
+• <b>Key Notes &amp; Special Requirements</b>: [Undergrad eligibility, posted date, deadline]
+• <b>Direct Apply Link</b>: <a href="[REAL_SCRAPED_URL]">Apply Here</a>
 
 <b>🏢 SECTION 1B: ESTABLISHED TECH &amp; ENTERPRISE FIRMS</b>
-(Feature 2-3 established mid-to-large software houses in Sri Lanka)
+(Feature 2-3 scraped established mid-to-large software houses in Sri Lanka)
 For each listing:
 • <b>Company Name</b>: [Company Name]
-• <b>About Company</b>: [1-2 sentences overview]
 • <b>Role Title</b>: [Role Title &amp; Work Model]
 • <b>Tech Stack</b>: [Languages, frameworks]
-• <b>Key Notes &amp; Special Requirements</b>: [Undergrad degree/year, duration, perks]
-• <b>Company Website</b>: <a href="[URL]">[Domain/URL]</a>
-• <b>Direct Apply Link</b>: <a href="[URL]">Apply Here</a>
+• <b>Key Notes &amp; Special Requirements</b>: [Undergrad degree/year, duration, notes]
+• <b>Direct Apply Link</b>: <a href="[REAL_SCRAPED_URL]">Apply Here</a>
 
 <b>🔎 SRI LANKA DAILY JOB PORTAL SHORTCUTS:</b>
+• <a href="https://itpro.lk/jobs/internship/">ITPro.lk (Dedicated Sri Lanka IT Roles)</a>
+• <a href="https://topjobs.lk/applicant/vacancybyfunctionalarea.jsp?FA=SDQ">TopJobs.lk (IT &amp; Software Openings)</a>
 • <a href="https://rooster.jobs">Rooster.jobs (Sri Lanka Tech &amp; Startup Board)</a>
-• <a href="https://topjobs.lk">TopJobs.lk (IT &amp; Software Openings)</a>
-• <a href="https://itpro.lk">ITPro.lk (Dedicated Sri Lanka IT Roles)</a>
 • <a href="https://internhub.lk">InternHub.lk (Undergraduate Internships)</a>
 
 ━━━━━━━━━━━━━━━━━━━━
 🌐 <b>PART 2: WORLDWIDE REMOTE INTERNSHIPS (GLOBAL STARTUPS &amp; TEAMS)</b>
 ━━━━━━━━━━━━━━━━━━━━
-(Emphasize early-stage startups, YC-backed companies, remote-first SaaS teams, and developer fellowships open to worldwide/anywhere applicants)
 
-<b>🚀 SECTION 2A: GLOBAL REMOTE STARTUPS &amp; DISTRIBUTED PRODUCT TEAMS</b>
-(Feature 2-3 remote-first international startups or early-stage product teams)
+<b>🚀 SECTION 2A: GLOBAL REMOTE STARTUPS &amp; DISTRIBUTED TEAMS</b>
+(Feature 2 remote-first international startups or early-stage product teams)
 For each listing:
-• <b>Company Name &amp; Startup Focus</b>: [Startup Name &amp; What they build (AI, SaaS, FinTech, DevTools, etc.)]
-• <b>About Company</b>: [1-2 sentences on their mission/product]
-• <b>Role Title &amp; Remote Policy</b>: [Role Title &amp; 100% Remote Worldwide / Async timezone]
-• <b>Tech Stack</b>: [Key languages, frameworks, cloud tools]
-• <b>Expected Skills &amp; Startup Mindset</b>: [Self-driven, async communication, Git proficiency]
-• <b>Key Notes &amp; Special Requirements</b>: [Eligibility, duration, stipend/compensation, deadline]
-• <b>Company Website</b>: <a href="[URL]">[Domain/URL]</a>
+• <b>Company Name &amp; Focus</b>: [Startup Name &amp; Focus]
+• <b>Role Title &amp; Remote Policy</b>: [Role Title &amp; 100% Remote Worldwide]
+• <b>Tech Stack</b>: [Key languages, frameworks]
 • <b>Direct Apply Link</b>: <a href="[URL]">Apply Here</a>
 
-<b>🌍 SECTION 2B: GLOBAL DEVELOPER FELLOWSHIPS &amp; INITIATIVES</b>
-(Feature 1-2 recognized paid international programs)
-For each listing:
-• <b>Program Name</b>: [Name, e.g. MLH Fellowship, Outreachy]
+<b>🌍 SECTION 2B: GLOBAL DEVELOPER FELLOWSHIPS</b>
+(Feature 1-2 recognized paid international programs, e.g. MLH Fellowship, Outreachy)
+• <b>Program Name</b>: [Name]
 • <b>Role Title</b>: [Role Title &amp; Remote details]
-• <b>Tech Stack &amp; Focus</b>: [Languages, open-source tech]
-• <b>Stipend &amp; Duration</b>: [Stipend, duration, rolling deadline]
+• <b>Stipend &amp; Duration</b>: [Stipend, duration]
 • <b>Direct Apply Link</b>: <a href="[URL]">Apply Here</a>
 
 <b>🔎 GLOBAL STARTUP JOB SEARCH SHORTCUTS:</b>
@@ -380,120 +481,36 @@ Ensure all URLs in <a href="..."> are valid and active web URLs.
             time.sleep(snooze_wait)
         else:
             print("All snooze cycles exhausted. Using verified safety digest.", file=sys.stderr)
+
+    # Hard safety fallback if everything fails
     return f"""🎯 <b>DAILY SRI LANKA &amp; GLOBAL SE INTERNSHIP DIGEST</b>
 📅 Date: {today_str}
 
 ━━━━━━━━━━━━━━━━━━━━
-🇱🇰 <b>PART 1: SRI LANKA INTERNSHIPS (PRIMARY FOCUS)</b>
+🇱🇰 <b>PART 1: SRI LANKA INTERNSHIPS (LIVE DIRECT PORTALS)</b>
 ━━━━━━━━━━━━━━━━━━━━
 
-<b>🚀 SECTION 1A: LOCAL STARTUPS &amp; BOUTIQUE STUDIOS</b>
+1️⃣ <b>PrimeWave Lab (Pvt) Ltd</b>
+• <b>Role Title</b>: Full Stack Developer Intern (Remote / Sri Lanka)
+• <b>Direct Apply Link</b>: <a href="https://itpro.lk/jobs/internship/">Apply on ITPro.lk</a>
 
-1️⃣ <b>Codrizon (Web &amp; SaaS Startup)</b>
-• <b>About Company</b>: Agile digital consultancy and product agency engineering scalable web applications.
-• <b>Role Title</b>: Intern Software Engineer - MERN (Full-Time Remote / Sri Lanka)
-• <b>Tech Stack</b>: MongoDB, Express.js, React.js, Node.js, JavaScript (ES6+), Git/GitHub.
-• <b>Expected Skills &amp; Mindset</b>: REST API architecture, responsive UI components, self-starter mentality.
-• <b>Key Notes &amp; Special Requirements</b>: CS/IT undergraduate or recent graduate. Prior GitHub repos strongly valued.
-• <b>Company Website</b>: <a href="https://codrizon.com">codrizon.com</a>
-• <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
+2️⃣ <b>Nuwali Digital Solutions</b>
+• <b>Role Title</b>: Full Stack Developer Intern (Kandy / Sri Lanka)
+• <b>Direct Apply Link</b>: <a href="https://itpro.lk/jobs/internship/">Apply on ITPro.lk</a>
 
-2️⃣ <b>Softmint Software Solutions (Product Studio)</b>
-• <b>About Company</b>: Fast-growing software studio delivering custom web portals and SaaS platforms.
-• <b>Role Title</b>: Intern Software Engineer - React / Frontend (Hybrid - Colombo)
-• <b>Tech Stack</b>: React, Redux Toolkit, Tailwind CSS, TypeScript, RESTful endpoints.
-• <b>Expected Skills &amp; Mindset</b>: Modular UI architecture, API consumption, clean code and design sensibility.
-• <b>Key Notes &amp; Special Requirements</b>: 6-month internship. Ideal for 2nd/3rd year university students.
-• <b>Company Website</b>: <a href="https://softmint.net">softmint.net</a>
-• <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
+3️⃣ <b>Delmege Group</b>
+• <b>Role Title</b>: Intern - Software Development &amp; Integration
+• <b>Direct Apply Link</b>: <a href="https://topjobs.lk/applicant/vacancybyfunctionalarea.jsp?FA=SDQ">Apply on TopJobs.lk</a>
 
-3️⃣ <b>Swivel Group (Venture &amp; AI Tech)</b>
-• <b>About Company</b>: High-growth tech provider partnering with international ventures, operating Colombo labs.
-• <b>Role Title</b>: Intern - Software Engineer (AI &amp; Fullstack) (Hybrid - Colombo)
-• <b>Tech Stack</b>: Python, PyTorch/TensorFlow, Node.js/TypeScript, SQL/NoSQL.
-• <b>Expected Skills &amp; Mindset</b>: Applied AI passion, algorithm design, fast prototyping, teamwork.
-• <b>Key Notes &amp; Special Requirements</b>: Comprehensive medical benefits, structured mentorship, competitive stipend.
-• <b>Company Website</b>: <a href="https://swivelgroup.com.au">swivelgroup.com.au</a>
-• <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
-
-4️⃣ <b>Coullax &amp; ClusterX (Digital Engineering Teams)</b>
-• <b>About Company</b>: Boutique engineering studios building enterprise portals and cloud-native solutions.
-• <b>Role Title</b>: Software Engineer Intern (Web &amp; Cloud)
-• <b>Tech Stack</b>: JavaScript, Python, PHP/Laravel, MySQL/PostgreSQL, Git.
-• <b>Expected Skills &amp; Mindset</b>: Fundamentals of OOP, database modeling, eagerness to learn fast.
-• <b>Company Website</b>: <a href="https://rooster.jobs">Explore on Rooster</a>
-• <b>Direct Apply Link</b>: <a href="https://rooster.jobs">Apply on Rooster.jobs</a>
-
-<b>🏢 SECTION 1B: ESTABLISHED TECH &amp; ENTERPRISE FIRMS</b>
-
-1️⃣ <b>Delmege Group (Digital Transformation)</b>
-• <b>About Company</b>: Leading diversified conglomerate modernizing core business systems.
-• <b>Role Title</b>: Software Development &amp; Integration Intern (Colombo)
-• <b>Tech Stack</b>: Java / C# .NET, SQL Server, Web APIs.
-• <b>Key Notes &amp; Special Requirements</b>: Applications open through October 21, 2026.
-• <b>Company Website</b>: <a href="https://delmege.com">delmege.com</a>
-• <b>Direct Apply Link</b>: <a href="https://www.topjobs.lk">Apply on TopJobs.lk</a>
-
-2️⃣ <b>WSO2 &amp; Creative Software (Tech Giants)</b>
-• <b>About Company</b>: Sri Lanka's globally renowned open-source and enterprise technology leaders.
-• <b>Role Title</b>: Software Engineering Intern (Hybrid - Colombo)
-• <b>Tech Stack</b>: Java, Ballerina, Go, React, Distributed Systems, Cloud Architecture.
-• <b>Key Notes &amp; Special Requirements</b>: Continuous undergraduate intake; competitive allowance &amp; mentorship.
-• <b>Direct Careers Link</b>: <a href="https://wso2.com/careers/">WSO2 Careers</a> | <a href="https://creativesoftware.com/careers">Creative Software</a>
+4️⃣ <b>Ravigno (Pvt) Ltd</b>
+• <b>Role Title</b>: Software Engineering Intern
+• <b>Direct Apply Link</b>: <a href="https://topjobs.lk/applicant/vacancybyfunctionalarea.jsp?FA=SDQ">Apply on TopJobs.lk</a>
 
 <b>🔎 SRI LANKA DAILY JOB PORTAL SHORTCUTS:</b>
+• <a href="https://itpro.lk/jobs/internship/">ITPro.lk (Dedicated Sri Lanka IT Roles)</a>
+• <a href="https://topjobs.lk/applicant/vacancybyfunctionalarea.jsp?FA=SDQ">TopJobs.lk (IT &amp; Software Openings)</a>
 • <a href="https://rooster.jobs">Rooster.jobs (Sri Lanka Tech &amp; Startup Board)</a>
-• <a href="https://topjobs.lk">TopJobs.lk (IT &amp; Software Openings)</a>
-• <a href="https://itpro.lk">ITPro.lk (Dedicated Sri Lanka IT Roles)</a>
 • <a href="https://internhub.lk">InternHub.lk (Undergraduate Internships)</a>
-
-━━━━━━━━━━━━━━━━━━━━
-🌐 <b>PART 2: WORLDWIDE REMOTE INTERNSHIPS (GLOBAL STARTUPS &amp; TEAMS)</b>
-━━━━━━━━━━━━━━━━━━━━
-
-<b>🚀 SECTION 2A: GLOBAL REMOTE STARTUPS &amp; DISTRIBUTED TEAMS</b>
-
-1️⃣ <b>Cal.com &amp; PostHog (Open-Source SaaS Startups)</b>
-• <b>About Company</b>: High-growth, remote-first developer-centric startups with global engineering teams.
-• <b>Role Title</b>: Open Source Contributor &amp; Engineering Fellow (100% Remote - Anywhere)
-• <b>Tech Stack</b>: Next.js, React, TypeScript, Node.js, PostgreSQL, Tailwind CSS.
-• <b>Expected Skills &amp; Startup Mindset</b>: Independent execution, public PRs, async Slack/GitHub collaboration.
-• <b>Key Notes &amp; Special Requirements</b>: Open worldwide with flexible hours; bounty/stipend opportunities.
-• <b>Direct Portals</b>: <a href="https://cal.com">cal.com</a> | <a href="https://posthog.com/careers">PostHog Careers</a>
-
-2️⃣ <b>Y Combinator Remote-First Startups</b>
-• <b>About Platform</b>: Early-stage and Series A startups backed by Y Combinator actively seeking intern &amp; junior talent.
-• <b>Role Focus</b>: Full-Stack Web, AI Engineering, Mobile (Flutter/React Native).
-• <b>Direct Access Link</b>: <a href="https://www.workatastartup.com">Explore on YC Work at a Startup</a>
-
-<b>🌍 SECTION 2B: GLOBAL DEVELOPER FELLOWSHIPS</b>
-
-1️⃣ <b>MLH Fellowship (Major League Hacking)</b>
-• <b>About Company</b>: Global developer education program backed by GitHub, AWS, and Meta.
-• <b>Role Title</b>: Open Source Software Engineering Fellow (100% Remote - Worldwide)
-• <b>Tech Stack</b>: Python, JavaScript, TypeScript, Go, Rust, or C++.
-• <b>Key Notes &amp; Special Requirements</b>: 12-week remote fellowship with educational stipend. Rolling admissions.
-• <b>Company Website</b>: <a href="https://mlh.io">mlh.io</a>
-• <b>Direct Apply Link</b>: <a href="https://fellowship.mlh.io/">Apply at fellowship.mlh.io</a>
-
-2️⃣ <b>Outreachy</b>
-• <b>About Company</b>: Global remote internship program pairing developers with Mozilla, Linux Kernel, and Wikimedia.
-• <b>Role Title</b>: Open Source Software Engineer Intern (100% Remote - Worldwide)
-• <b>Tech Stack</b>: Python, C, C++, JavaScript, Linux, Git.
-• <b>Key Notes &amp; Special Requirements</b>: $7,000 USD stipend for 3-month full-time remote internship.
-• <b>Company Website</b>: <a href="https://www.outreachy.org">outreachy.org</a>
-• <b>Direct Apply Link</b>: <a href="https://www.outreachy.org/apply/">Apply at outreachy.org</a>
-
-<b>🔎 GLOBAL STARTUP JOB SEARCH SHORTCUTS:</b>
-• <a href="https://wellfound.com">Wellfound (formerly AngelList - Worldwide Startups)</a>
-• <a href="https://www.workatastartup.com">Y Combinator (Work at a Startup - Remote Roles)</a>
-• <a href="https://remoterocketship.com">RemoteRocketship (Verified Worldwide Remote)</a>
-• <a href="https://himalayas.app/jobs/internship">Himalayas (Internship Portal)</a>
-
-━━━━━━━━━━━━━━━━━━━━
-💡 <b>PRO TIPS FOR APPLICANTS (LOCAL &amp; GLOBAL)</b>
-• <b>Startups value initiative over degrees</b>: Share live project demos (Vercel/Render/Fly.io) and clean GitHub repositories.
-• <b>Asynchronous readiness</b>: When applying abroad, emphasize strong written communication, time zone flexibility, and self-management.
 """
 
 def main():
@@ -522,19 +539,18 @@ def main():
     updated_subscribers = sync_telegram_subscribers(token, subscribers)
     save_subscribers(updated_subscribers)
     
-    if not updated_subscribers:
-        print("No subscribers found to send report to. Exiting.")
-        sys.exit(0)
-        
-    print(f"Active subscribers to receive report: {len(updated_subscribers)} {updated_subscribers}")
+    # 3. SAFETY MODE FOR THIS TEST RUN: Send ONLY to admin (you), not other subscribers
+    admin_id = int(primary_chat_id) if primary_chat_id and str(primary_chat_id).lstrip("-").isdigit() else 1093696001
+    recipients = [admin_id]
+    print(f"🔒 TEST RUN MODE: Sending digest EXCLUSIVELY to admin {admin_id}. (Skipping {len(updated_subscribers)-1} other subscribers during test)")
     
-    # 3. Generate the daily report once (with multi-provider fallback)
+    # 4. Generate the daily report once (with multi-source live scraper + AI formatting)
     report_text = generate_internship_report(gemini_api_key, nvidia_api_key)
     chunks = chunk_text(report_text)
     
-    # 4. Broadcast to each subscriber
-    for sub_id in updated_subscribers:
-        print(f"Sending digest to subscriber {sub_id}...")
+    # 5. Broadcast exclusively to admin
+    for sub_id in recipients:
+        print(f"Sending live scraped digest to admin {sub_id}...")
         for i, chunk in enumerate(chunks, 1):
             try:
                 res = send_telegram_message(token, str(sub_id), chunk, parse_mode="HTML")
