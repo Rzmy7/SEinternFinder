@@ -123,8 +123,18 @@ def save_subscribers(subs: list):
     except Exception as e:
         print(f"Error saving {SUBSCRIBERS_FILE}: {e}", file=sys.stderr)
 
-def sync_telegram_subscribers(token: str, current_subs: list) -> list:
-    """Queries Telegram getUpdates to detect new /start and /stop commands."""
+def get_telegram_chat_info(token: str, chat_id: int) -> dict:
+    """Fetches user information (name, username) from Telegram."""
+    url = f"https://api.telegram.org/bot{token}/getChat?chat_id={chat_id}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("result", {})
+    except Exception:
+        return {}
+
+def sync_telegram_subscribers(token: str, current_subs: list, admin_chat_id: int = None) -> list:
+    """Queries Telegram getUpdates to detect new /start, /stop, and /admin commands."""
     subscribers = set(current_subs)
     url = f"https://api.telegram.org/bot{token}/getUpdates"
     
@@ -136,6 +146,8 @@ def sync_telegram_subscribers(token: str, current_subs: list) -> list:
         print(f"Notice: Could not fetch getUpdates ({e}). Using existing subscribers list.", file=sys.stderr)
         return list(subscribers)
         
+    admin_requested = False
+    
     for update in updates:
         msg = update.get("message") or update.get("channel_post")
         if not msg:
@@ -171,6 +183,33 @@ def sync_telegram_subscribers(token: str, current_subs: list) -> list:
                     print(f"Subscriber removed: {chat_id}")
                 except Exception:
                     pass
+        elif text in ["/admin", "/subscribers", "/users", "/stats"]:
+            if admin_chat_id and int(chat_id) == int(admin_chat_id):
+                admin_requested = True
+
+    # If admin queried their bot, reply with the full active subscriber list
+    if admin_requested and admin_chat_id:
+        print(f"Admin command detected from {admin_chat_id}. Composing subscribers report...")
+        user_lines = []
+        for i, sub_id in enumerate(sorted(list(subscribers)), 1):
+            info = get_telegram_chat_info(token, sub_id)
+            first_name = info.get("first_name", "")
+            username = info.get("username", "")
+            display_user = f"@{username}" if username else (first_name or "Unknown")
+            is_admin_tag = " 👑 <i>[Admin]</i>" if int(sub_id) == int(admin_chat_id) else ""
+            user_lines.append(f"{i}. <b>{display_user}</b> (<code>{sub_id}</code>){is_admin_tag}")
+            
+        admin_report = (
+            f"📊 <b>SE Intern Bot - Subscriber Statistics</b>\n\n"
+            f"👥 <b>Total Active Subscribers:</b> {len(subscribers)}\n\n"
+            + "\n".join(user_lines) +
+            f"\n\n<i>Database: Private GitHub Gist</i>"
+        )
+        try:
+            send_telegram_message(token, str(admin_chat_id), admin_report, parse_mode="HTML")
+            print("Admin statistics sent to admin chat successfully.")
+        except Exception as e:
+            print(f"Failed to send admin report: {e}", file=sys.stderr)
                     
     return list(subscribers)
 
@@ -637,9 +676,10 @@ def main():
         if primary_id not in subscribers:
             subscribers.append(primary_id)
             
-    # 2. Check getUpdates for new subscribers (/start) or unsubscribes (/stop)
+    # 2. Check getUpdates for new subscribers (/start), /stop, and /admin commands
     print("Checking for new bot subscribers via getUpdates...")
-    updated_subscribers = sync_telegram_subscribers(token, subscribers)
+    admin_id = int(primary_chat_id) if primary_chat_id and str(primary_chat_id).lstrip("-").isdigit() else None
+    updated_subscribers = sync_telegram_subscribers(token, subscribers, admin_chat_id=admin_id)
     save_subscribers(updated_subscribers)
     
     if not updated_subscribers:
